@@ -16,11 +16,13 @@ npm run lint                   # eslint --fix over root .ts and tests/**/*.ts
 npm run lint:file <path>       # eslint --fix on a single file
 npm run format                 # prettier --write over **/*.{ts,js,cjs,md,json}
 npm run format:file <path>     # prettier --write on a single file
+npm run organize-imports       # organize-imports-cli over all tracked .ts files (via git ls-files)
+npm run organize-imports:file <path>  # organize-imports-cli on a single file
 ```
 
 There is no build step. Pi auto-discovers `*.ts` files at runtime; `tsc` is configured with `noEmit: true` purely for type-checking.
 
-**Pre-commit hook** (`.husky/pre-commit`) runs `npx lint-staged && npm run typecheck && npm test`. lint-staged runs eslint on staged `.ts` files and prettier on staged `.{ts,js,cjs,md,json}` files (see `lint-staged` config in [package.json](package.json)).
+**Pre-commit hook** (`.husky/pre-commit`) runs `npx lint-staged && npm run typecheck && npm test`. For staged `.ts` files lint-staged runs `organize-imports-cli` (sorts/removes unused imports via the TS language service) and then `eslint --fix`; for staged `.{ts,js,cjs,md,json}` files it runs `prettier --write` (see `lint-staged` config in [package.json](package.json)).
 
 ## Project Layout
 

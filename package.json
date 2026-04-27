@@ -11,6 +11,8 @@
     "format:file": "prettier --write",
     "lint": "eslint '*.ts' 'tests/**/*.ts' --fix",
     "lint:file": "eslint --fix",
+    "organize-imports": "git ls-files '*.ts' | xargs organize-imports-cli",
+    "organize-imports:file": "organize-imports-cli",
     "lint-staged": "lint-staged",
     "prepare": "husky"
   },
@@ -26,13 +28,20 @@
     "husky": "^9.1.7",
     "jest": "^29.7.0",
     "lint-staged": "^16.0.0",
+    "organize-imports-cli": "^0.10.0",
     "prettier": "^3.5.3",
     "ts-jest": "^29.2.5",
     "typescript": "^5.6.3"
   },
   "lint-staged": {
-    "*.ts": "eslint --fix",
-    "tests/**/*.ts": "eslint --fix",
+    "*.ts": [
+      "organize-imports-cli",
+      "eslint --fix"
+    ],
+    "tests/**/*.ts": [
+      "organize-imports-cli",
+      "eslint --fix"
+    ],
     "*.{ts,js,cjs,md,json}": "prettier --write"
   }
 }

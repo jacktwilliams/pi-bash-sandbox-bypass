@@ -53,7 +53,7 @@ This repo is a personal workspace for pi (`@mariozechner/pi-coding-agent`) exten
 **Extension hooks in use** (see [bash-approval.ts](bash-approval.ts) for the canonical example):
 
 - `pi.registerCommand(name, { description, handler })` — adds a `/<name>` slash command
-- `pi.on("tool_call", handler)` — intercepts tool calls; return `undefined` to allow, `{ block: true, reason }` to deny
+- `pi.on("tool_call", handler)` — intercepts tool calls; fall through (bare `return`) to allow, `{ block: true, reason }` to deny
 
 **Extension contexts**:
 
@@ -61,6 +61,37 @@ This repo is a personal workspace for pi (`@mariozechner/pi-coding-agent`) exten
 - Non-interactive (e.g. `pi -p`): `ctx.hasUI === false`. Extensions must not call `ctx.ui.select` and should fall back to a safe default (typically: block)
 
 **Config files** live under `~/.pi/agent/` (e.g. `~/.pi/agent/bash-approval.json`). Extensions own their config schema, load lazily, and provide a `<name>-reload` command to re-read from disk without restarting pi.
+
+## Testing
+
+Tests use Jest + ts-jest and live under `tests/<feature>.spec.ts`. They are kept out of the workspace root specifically so pi's auto-discovery doesn't try to load them as extensions at runtime (`testMatch` and the `tsconfig.json` `include` keep this boundary explicit — don't move spec files to the root).
+
+**Conventions**:
+
+- One spec file per extension, named to match.
+- Mock `@mariozechner/pi-coding-agent` with `jest.mock(..., { virtual: true })` — it's ESM-only and Jest's CJS resolver can't load it. Stub only the helpers your extension imports (e.g. `isToolCallEventType`).
+- Mock `node:fs` rather than touching the real filesystem.
+- Provide a `setup()` helper that resets modules, applies fs mocks, calls the extension's default export against a fake `pi` API, and returns the recorded `tool_call` handler and registered commands. See [tests/bash-approval.spec.ts](tests/bash-approval.spec.ts) for the canonical pattern.
+- Build a `makeCtx()` helper that returns `{ ctx, notify, select }` with `ctx.hasUI` togglable and `select` driven by an injected `pick` function — this keeps interactive tests readable.
+
+**Coverage**: thresholds are 80% lines/branches/functions/statements. New extensions should be added to `collectCoverageFrom` in [jest.config.cjs](jest.config.cjs).
+
+## Verification
+
+Before considering a change done:
+
+1. `npm run lint` — must pass cleanly (eslint + prettier integration).
+2. `npm run typecheck` — must pass cleanly.
+3. `npm test` — all specs green; new behavior must have a test.
+4. For changes that affect runtime behavior, also exercise the extension in pi itself (e.g. trigger the hook) — type-checks and unit tests don't catch e.g. accidentally-removed `void` on a fire-and-forget `ctx.ui.notify`.
+
+The pre-commit hook runs lint-staged + typecheck + tests, so most of this is enforced automatically on commit.
+
+There is no build artifact to verify; pi loads the `.ts` files directly.
+
+## Tech Stack
+
+Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest • ESLint 8 + `@typescript-eslint` 8 • Prettier 3 • husky 9 + lint-staged 16 • `@mariozechner/pi-coding-agent` (ExtensionAPI host)
 
 ## Code Conventions
 
@@ -170,7 +201,7 @@ Use `Boolean(value)` instead of `!!value` for type coercion.
 
 ### Null vs Undefined
 
-Prefer `null` for "explicit absence" return values; `undefined` is reserved for "not yet provided" / optional. The pi `tool_call` hook contract uses `undefined` to mean "no opinion, proceed" — respect that contract.
+Prefer `null` for "explicit absence" return values; `undefined` is reserved for "not yet provided" / optional. The pi `tool_call` hook contract treats fall-through (a bare `return` or no return at all) as "no opinion, proceed" — respect that contract; do not write `return undefined` explicitly.
 
 ```typescript
 // Good — explicit absence
@@ -244,12 +275,12 @@ Always use braces `{}` for `if`, `else`, `for`, `while`, etc. — even for singl
 
 ```typescript
 // Good
-if (allMatch) {
-  return undefined;
+if (value === "example") {
+  return true;
 }
 
 // Bad
-if (allMatch) return undefined;
+if (value === "example") return true;
 ```
 
 ### Spacing
@@ -271,19 +302,19 @@ function loadConfig(): BashApprovalConfig {
 
 ### Early Returns
 
-Prefer early returns (guard clauses) to reduce nesting. Exit early for edge cases and "no-op" branches — this is especially important in `tool_call` hooks where most events should fall through with `return undefined`.
+Prefer early returns (guard clauses) to reduce nesting. Exit early for edge cases and "no-op" branches — this is especially important in `tool_call` hooks where most events should fall through with a bare `return;`.
 
 ```typescript
 // Good
 pi.on("tool_call", async (event, ctx) => {
   if (!isToolCallEventType("bash", event)) {
-    return undefined;
+    return;
   }
 
   const command = String(event.input.command ?? "").trim();
 
   if (!command) {
-    return undefined;
+    return;
   }
 
   // … main logic
@@ -358,7 +389,7 @@ const command = String(
 2. Default-export `(pi: ExtensionAPI) => void`.
 3. If the extension reads user config, store it under `~/.pi/agent/<feature>.json` and create the file with sensible defaults on first run (ENOENT → write defaults).
 4. Register slash commands via `pi.registerCommand` — at minimum a `<feature>-reload` if the extension is config-driven.
-5. Register event hooks via `pi.on(...)`. Always early-return `undefined` for events you don't handle.
+5. Register event hooks via `pi.on(...)`. Always early-return (bare `return;`) for events you don't handle.
 6. Handle `ctx.hasUI === false` explicitly — pick a safe default (typically: block / no-op) for non-interactive runs.
 7. Add `tests/<feature>.spec.ts` (see Testing).
 8. Run `npm run typecheck && npm test` before committing.
@@ -381,7 +412,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("bash", event)) {
-      return undefined;
+      return;
     }
 
     if (!ctx.hasUI) {
@@ -389,38 +420,6 @@ export default function (pi: ExtensionAPI) {
     }
 
     // …
-    return undefined;
   });
 }
 ```
-
-## Testing
-
-Tests use Jest + ts-jest and live under `tests/<feature>.spec.ts`. They are kept out of the workspace root specifically so pi's auto-discovery doesn't try to load them as extensions at runtime (`testMatch` and the `tsconfig.json` `include` keep this boundary explicit — don't move spec files to the root).
-
-**Conventions**:
-
-- One spec file per extension, named to match.
-- Mock `@mariozechner/pi-coding-agent` with `jest.mock(..., { virtual: true })` — it's ESM-only and Jest's CJS resolver can't load it. Stub only the helpers your extension imports (e.g. `isToolCallEventType`).
-- Mock `node:fs` rather than touching the real filesystem.
-- Provide a `setup()` helper that resets modules, applies fs mocks, calls the extension's default export against a fake `pi` API, and returns the recorded `tool_call` handler and registered commands. See [tests/bash-approval.spec.ts](tests/bash-approval.spec.ts) for the canonical pattern.
-- Build a `makeCtx()` helper that returns `{ ctx, notify, select }` with `ctx.hasUI` togglable and `select` driven by an injected `pick` function — this keeps interactive tests readable.
-
-**Coverage**: thresholds are 80% lines/branches/functions/statements. New extensions should be added to `collectCoverageFrom` in [jest.config.cjs](jest.config.cjs).
-
-## Verification
-
-Before considering a change done:
-
-1. `npm run lint` — must pass cleanly (eslint + prettier integration).
-2. `npm run typecheck` — must pass cleanly.
-3. `npm test` — all specs green; new behavior must have a test.
-4. For changes that affect runtime behavior, also exercise the extension in pi itself (e.g. trigger the hook) — type-checks and unit tests don't catch e.g. accidentally-removed `void` on a fire-and-forget `ctx.ui.notify`.
-
-The pre-commit hook runs lint-staged + typecheck + tests, so most of this is enforced automatically on commit.
-
-There is no build artifact to verify; pi loads the `.ts` files directly.
-
-## Tech Stack
-
-Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest • ESLint 8 + `@typescript-eslint` 8 • Prettier 3 • husky 9 + lint-staged 16 • `@mariozechner/pi-coding-agent` (ExtensionAPI host)

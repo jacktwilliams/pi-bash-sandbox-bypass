@@ -260,15 +260,22 @@ export default function (pi: ExtensionAPI) {
       ? splitCommand(command)
       : [trimmedCommand];
 
-    const allMatch =
-      segments.length > 0 &&
-      segments.every((segment) =>
-        config.allowed.some((rule) => matchesPattern(segment, rule)),
-      );
+    const isMatch = (segment: string) =>
+      config.allowed.some((rule) => matchesPattern(segment, rule));
+
+    const allMatch = segments.length > 0 && segments.every(isMatch);
 
     if (allMatch) {
       return undefined;
     }
+
+    // Base the prefix suggestion on the first segment that actually fails so
+    // that the offered "<prefix>:*" rule would unblock the command. Without
+    // this, a chain like `cd /some/path && git log ...` (where only `git log`
+    // is missing from the allow-list) would surface a useless
+    // `cd /some/path:*` suggestion derived from the head of the chain.
+    const failingSegment =
+      segments.find((segment) => !isMatch(segment)) ?? trimmedCommand;
 
     if (!ctx.hasUI) {
       return {
@@ -278,7 +285,7 @@ export default function (pi: ExtensionAPI) {
     }
 
     const exactLabel = `Allow always (exact): ${trimmedCommand}`;
-    const suggested = suggestPrefixPattern(trimmedCommand);
+    const suggested = suggestPrefixPattern(failingSegment);
     const prefixLabel =
       suggested &&
       suggested !== trimmedCommand &&

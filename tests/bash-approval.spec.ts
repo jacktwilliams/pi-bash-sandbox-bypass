@@ -510,8 +510,14 @@ describe("bash-approval extension", () => {
     });
 
     it("does not offer prefix label when prefix is already in allow-list", async () => {
+      // `splitChains: false` so the whole literal command is the only segment.
+      // Its suggested prefix `git status:*` is already an allow-rule (but doesn't
+      // match the literal command verbatim), so the prefix label must be omitted.
       const { toolCallHandler } = setup({
-        configFile: JSON.stringify({ allowed: ["git status:*"] }),
+        configFile: JSON.stringify({
+          allowed: ["git status:*"],
+          splitChains: false,
+        }),
       });
       let captured: string[] = [];
       const { ctx } = makeCtx({
@@ -522,10 +528,59 @@ describe("bash-approval extension", () => {
         },
       });
 
-      // Chain forces the prompt: "git status" matches but "rm foo" doesn't.
+      // `git status && rm foo` does NOT match `git status:*` as a single
+      // pattern (the literal includes `&&`), so the prompt fires. The first
+      // two tokens are `git status`, so the suggested prefix matches the
+      // existing rule and should be suppressed.
       await toolCallHandler!(bashEvent("git status && rm foo"), ctx);
 
       expect(captured).not.toContain("Allow always: git status:*");
+    });
+
+    it("derives prefix suggestion from the first failing segment of a chain", async () => {
+      // Regression: previously the suggestion was derived from the head of the
+      // whole chained command, so a chain like `cd /path && git log ...` (with
+      // `cd:*` already allowed) would offer a useless `cd /path:*` rule
+      // instead of `git log:*`, which is what would actually unblock it.
+      const { toolCallHandler } = setup({
+        configFile: JSON.stringify({ allowed: ["cd:*", "head:*"] }),
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent("cd /Users/felix/code/x && git log --oneline | head -10"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: git log:*");
+      expect(captured).not.toContain("Allow always: cd /Users/felix/code/x:*");
+    });
+
+    it("persists the failing-segment prefix when user accepts it", async () => {
+      const { toolCallHandler, fs } = setup({
+        configFile: JSON.stringify({ allowed: ["cd:*", "head:*"] }),
+      });
+      const { ctx } = makeCtx({
+        pick: (options) =>
+          options.find((option) => option === "Allow always: git log:*") ??
+          null,
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("cd /tmp && git log --oneline | head -3"),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      const [, content] = fs.writeFileSync.mock.calls.at(-1)!;
+      expect(JSON.parse(content as string).allowed).toContain("git log:*");
     });
 
     it("does not offer exact label when full command literal is already a rule", async () => {

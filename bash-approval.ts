@@ -47,6 +47,15 @@ const DEFAULT_CONFIG: BashApprovalConfig = {
 
 const PREFIX_GLOB_SUFFIX_LENGTH = 2;
 const TRAILING_GLOB_SUFFIX_LENGTH = 1;
+const EXACT_LABEL_COMMAND_MAX_LENGTH = 60;
+
+function truncateForLabel(value: string, maxLength: number): string {
+  if (value.length <= maxLength) {
+    return value;
+  }
+
+  return `${value.slice(0, maxLength)}…`;
+}
 
 function loadConfig(): BashApprovalConfig {
   try {
@@ -284,7 +293,10 @@ export default function (pi: ExtensionAPI) {
       };
     }
 
-    const exactLabel = `Allow always (exact): ${trimmedCommand}`;
+    const exactLabel = `Allow always (exact): ${truncateForLabel(
+      trimmedCommand,
+      EXACT_LABEL_COMMAND_MAX_LENGTH,
+    )}`;
     const suggested = suggestPrefixPattern(failingSegment);
     const prefixLabel =
       suggested &&

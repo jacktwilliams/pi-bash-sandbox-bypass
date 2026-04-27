@@ -133,7 +133,7 @@ function buildSystemPromptInjection(
 }
 
 function statusLine(state: CavemanState): string {
-  return state.enabled ? `🪨 caveman ${state.level}` : "🪨 caveman off";
+  return state.enabled ? `🪨 caveman ${state.level} •` : "🪨 caveman off •";
 }
 
 export default function (pi: ExtensionAPI) {

@@ -1,7 +1,6 @@
 {
-  "name": "pi-extensions-workspace",
+  "name": "pi-extensions",
   "private": true,
-  "version": "0.0.0",
   "description": "Editor/tooling workspace for personal pi extensions. Pi auto-discovers *.ts files in this directory at runtime; the package.json + tsconfig.json + node_modules/ here exist solely to give VSCode/tsserver type-resolution and to host dev tooling. Do NOT add a `pi.extensions` field — that would override pi's auto-discovery.",
   "scripts": {
     "setup": "npm install --no-audit --no-fund",

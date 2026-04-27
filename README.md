@@ -1,4 +1,4 @@
-# pi extensions workspace
+# pi-extensions
 
 Personal pi extensions. Pi auto-discovers `*.ts` files in this directory at
 runtime; the `package.json`, `tsconfig.json`, and `node_modules/` here exist
@@ -14,15 +14,6 @@ Install dev dependencies:
 ```sh
 npm install
 ```
-
-Run this:
-
-- once after cloning
-- after upgrading dependencies
-- whenever VSCode stops resolving pi types
-
-Running `npm install` also installs the husky `pre-commit` hook (via the
-`prepare` script), which runs lint-staged + typecheck + tests on every commit.
 
 ## Scripts
 

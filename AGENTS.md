@@ -182,14 +182,6 @@ function suggestPrefixPattern(command: string): string | null {
 
   return `${firstToken}:*`;
 }
-
-// Good — pi hook contract: undefined means "allow, no opinion"
-pi.on("tool_call", async (event, ctx) => {
-  if (!isToolCallEventType("bash", event)) {
-    return undefined;
-  }
-  // …
-});
 ```
 
 ### Object Spreading

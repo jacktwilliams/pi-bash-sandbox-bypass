@@ -40,6 +40,26 @@ type BashApprovalConfig = {
   splitChains: boolean;
 };
 
+type NotifyLevel = "info" | "error";
+
+type ApprovalCtx = {
+  hasUI: boolean;
+  ui: {
+    notify: (message: string, level: NotifyLevel) => void;
+    select: (
+      message: string,
+      options: string[],
+    ) => Promise<string | null | undefined>;
+  };
+};
+
+type PromptOptions = {
+  options: string[];
+  exactLabel: string;
+  prefixLabel: string | null;
+  suggested: string | null;
+};
+
 const DEFAULT_CONFIG: BashApprovalConfig = {
   allowed: [],
   splitChains: true,
@@ -49,6 +69,12 @@ const PREFIX_GLOB_SUFFIX_LENGTH = 2;
 const TRAILING_GLOB_SUFFIX_LENGTH = 1;
 const EXACT_LABEL_COMMAND_MAX_LENGTH = 60;
 
+const ALLOW_ONCE = "Allow once";
+const DENY = "Deny";
+const BLOCKED_BY_USER = "Blocked by user";
+
+// ---------- formatting helpers ----------
+
 function truncateForLabel(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
     return value;
@@ -57,38 +83,58 @@ function truncateForLabel(value: string, maxLength: number): string {
   return `${value.slice(0, maxLength)}…`;
 }
 
+function errnoCode(error: unknown): string | undefined {
+  if (error instanceof Error) {
+    return (error as NodeJS.ErrnoException).code;
+  }
+
+  return;
+}
+
+function errorMessage(error: unknown): string {
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return String(error);
+}
+
+// ---------- config I/O ----------
+
+function parseConfig(raw: string): BashApprovalConfig {
+  const parsed = JSON.parse(raw) as Partial<BashApprovalConfig>;
+
+  const allowed = Array.isArray(parsed.allowed)
+    ? parsed.allowed.filter(
+        (entry): entry is string => typeof entry === "string",
+      )
+    : [];
+
+  return {
+    allowed,
+    splitChains: parsed.splitChains !== false,
+  };
+}
+
+function writeDefaultConfigFile(): void {
+  try {
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.writeFileSync(
+      CONFIG_PATH,
+      `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
+      "utf8",
+    );
+  } catch {
+    // Best effort; the caller falls back to in-memory defaults.
+  }
+}
+
 function loadConfig(): BashApprovalConfig {
   try {
-    const raw = fs.readFileSync(CONFIG_PATH, "utf8");
-    const parsed = JSON.parse(raw) as Partial<BashApprovalConfig>;
-
-    return {
-      allowed: Array.isArray(parsed.allowed)
-        ? parsed.allowed.filter(
-            (entry): entry is string => typeof entry === "string",
-          )
-        : [],
-      splitChains: parsed.splitChains !== false,
-    };
+    return parseConfig(fs.readFileSync(CONFIG_PATH, "utf8"));
   } catch (error: unknown) {
-    const code =
-      error instanceof Error
-        ? (error as NodeJS.ErrnoException).code
-        : undefined;
-
-    if (code === "ENOENT") {
-      try {
-        fs.mkdirSync(CONFIG_DIR, { recursive: true });
-        fs.writeFileSync(
-          CONFIG_PATH,
-          `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
-          "utf8",
-        );
-      } catch {
-        // Best effort; fall back to in-memory defaults below.
-      }
-
-      return { ...DEFAULT_CONFIG };
+    if (errnoCode(error) === "ENOENT") {
+      writeDefaultConfigFile();
     }
 
     // Malformed JSON or other error – fall back to a safe default that prompts on every command.
@@ -101,6 +147,18 @@ function saveConfig(config: BashApprovalConfig): void {
   fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, "utf8");
 }
 
+// ---------- pattern matching ----------
+
+function matchesPrefixGlob(command: string, pattern: string): boolean {
+  const prefix = pattern.slice(0, -PREFIX_GLOB_SUFFIX_LENGTH).trim();
+
+  if (!prefix) {
+    return false;
+  }
+
+  return command === prefix || command.startsWith(`${prefix} `);
+}
+
 function matchesPattern(command: string, pattern: string): boolean {
   const trimmedCommand = command.trim();
   const trimmedPattern = pattern.trim();
@@ -111,13 +169,7 @@ function matchesPattern(command: string, pattern: string): boolean {
 
   // "<prefix>:*" matches `<prefix>` exactly or `<prefix> <anything>`
   if (trimmedPattern.endsWith(":*")) {
-    const prefix = trimmedPattern.slice(0, -PREFIX_GLOB_SUFFIX_LENGTH).trim();
-
-    if (!prefix) {
-      return false;
-    }
-
-    return trimmedCommand === prefix || trimmedCommand.startsWith(`${prefix} `);
+    return matchesPrefixGlob(trimmedCommand, trimmedPattern);
   }
 
   // Trailing "*" – simple glob: prefix match.
@@ -131,72 +183,101 @@ function matchesPattern(command: string, pattern: string): boolean {
   return trimmedCommand === trimmedPattern;
 }
 
+// ---------- shell splitting ----------
+
+type SplitState = {
+  current: string;
+  parts: string[];
+  quote: '"' | "'" | null;
+};
+
+function isDoubleSeparator(
+  char: string,
+  nextChar: string | undefined,
+): boolean {
+  return (
+    (char === "&" && nextChar === "&") || (char === "|" && nextChar === "|")
+  );
+}
+
+function isSingleSeparator(char: string): boolean {
+  return char === ";" || char === "|" || char === "\n";
+}
+
+function flushSegment(state: SplitState): void {
+  state.parts.push(state.current);
+  state.current = "";
+}
+
+function stepInsideQuote(
+  char: string,
+  nextChar: string | undefined,
+  state: SplitState,
+): number {
+  if (char === "\\" && nextChar !== undefined) {
+    state.current += `${char}${nextChar}`;
+    return 2;
+  }
+
+  if (char === state.quote) {
+    state.quote = null;
+  }
+
+  state.current += char;
+  return 1;
+}
+
+function stepOutsideQuote(
+  char: string,
+  nextChar: string | undefined,
+  state: SplitState,
+): number {
+  if (char === '"' || char === "'") {
+    state.quote = char;
+    state.current += char;
+    return 1;
+  }
+
+  if (isDoubleSeparator(char, nextChar)) {
+    flushSegment(state);
+    return 2;
+  }
+
+  if (isSingleSeparator(char)) {
+    flushSegment(state);
+    return 1;
+  }
+
+  state.current += char;
+  return 1;
+}
+
 /**
  * Split a command string on shell separators (`&&`, `||`, `;`, `|`, newline)
  * while respecting single/double quotes. Good enough for the common cases the
  * agent actually emits; it is not a full shell parser.
  */
 function splitCommand(command: string): string[] {
-  const parts: string[] = [];
-  let current = "";
-  let quote: '"' | "'" | null = null;
+  const state: SplitState = { current: "", parts: [], quote: null };
   let index = 0;
 
   while (index < command.length) {
     const char = command.at(index) ?? "";
-    const nextChar =
-      index + 1 < command.length ? (command.at(index + 1) ?? "") : undefined;
+    const nextChar = command.at(index + 1);
 
-    if (quote) {
-      if (char === "\\" && nextChar !== undefined) {
-        current += `${char}${nextChar}`;
-        index += 2;
-        continue;
-      }
-
-      if (char === quote) {
-        quote = null;
-      }
-
-      current += char;
-      index++;
-      continue;
-    }
-
-    if (char === '"' || char === "'") {
-      quote = char;
-      current += char;
-      index++;
-      continue;
-    }
-
-    if (
-      (char === "&" && nextChar === "&") ||
-      (char === "|" && nextChar === "|")
-    ) {
-      parts.push(current);
-      current = "";
-      index += 2;
-      continue;
-    }
-
-    if (char === ";" || char === "|" || char === "\n") {
-      parts.push(current);
-      current = "";
-      index++;
-      continue;
-    }
-
-    current += char;
-    index++;
+    index += state.quote
+      ? stepInsideQuote(char, nextChar, state)
+      : stepOutsideQuote(char, nextChar, state);
   }
 
-  if (current.trim()) {
-    parts.push(current);
+  if (state.current.trim()) {
+    state.parts.push(state.current);
   }
 
-  return parts.map((part) => part.trim()).filter(Boolean);
+  return state.parts.map((part) => part.trim()).filter(Boolean);
 }
+
+// ---------- approval helpers ----------
 
 /**
  * Suggest a `<prefix>:*` pattern for the given command. Uses the first two
@@ -219,6 +300,111 @@ function suggestPrefixPattern(command: string): string | null {
   }
 
   return `${firstToken}:*`;
+}
+
+type CommandEvaluation = {
+  allMatch: boolean;
+  failingSegment: string;
+};
+
+function evaluateCommand(
+  command: string,
+  config: BashApprovalConfig,
+): CommandEvaluation {
+  const trimmedCommand = command.trim();
+  const segments = config.splitChains
+    ? splitCommand(command)
+    : [trimmedCommand];
+
+  const isMatch = (segment: string) =>
+    config.allowed.some((rule) => matchesPattern(segment, rule));
+
+  const allMatch = segments.length > 0 && segments.every(isMatch);
+
+  if (allMatch) {
+    return { allMatch: true, failingSegment: trimmedCommand };
+  }
+
+  // Base the prefix suggestion on the first segment that actually fails so
+  // that the offered "<prefix>:*" rule would unblock the command. Without
+  // this, a chain like `cd /some/path && git log ...` (where only `git log`
+  // is missing from the allow-list) would surface a useless
+  // `cd /some/path:*` suggestion derived from the head of the chain.
+  const failingSegment =
+    segments.find((segment) => !isMatch(segment)) ?? trimmedCommand;
+
+  return { allMatch: false, failingSegment };
+}
+
+function buildPromptOptions(
+  trimmedCommand: string,
+  failingSegment: string,
+  config: BashApprovalConfig,
+): PromptOptions {
+  const exactLabel = `Allow always (exact): ${truncateForLabel(
+    trimmedCommand,
+    EXACT_LABEL_COMMAND_MAX_LENGTH,
+  )}`;
+
+  const suggested = suggestPrefixPattern(failingSegment);
+  const prefixLabel =
+    suggested &&
+    suggested !== trimmedCommand &&
+    !config.allowed.includes(suggested)
+      ? `Allow always: ${suggested}`
+      : null;
+
+  const options: string[] = [ALLOW_ONCE];
+
+  if (!config.allowed.includes(trimmedCommand)) {
+    options.push(exactLabel);
+  }
+
+  if (prefixLabel) {
+    options.push(prefixLabel);
+  }
+
+  options.push(DENY);
+
+  return { options, exactLabel, prefixLabel, suggested };
+}
+
+function persistRule(
+  config: BashApprovalConfig,
+  rule: string,
+  ctx: ApprovalCtx,
+): void {
+  if (config.allowed.includes(rule)) {
+    return;
+  }
+
+  config.allowed.push(rule);
+
+  try {
+    saveConfig(config);
+    ctx.ui.notify(`Added rule: ${rule}`, "info");
+  } catch (error: unknown) {
+    ctx.ui.notify(`Failed to persist rule: ${errorMessage(error)}`, "error");
+  }
+}
+
+function applyChoice(
+  choice: string,
+  trimmedCommand: string,
+  prompt: PromptOptions,
+  config: BashApprovalConfig,
+  ctx: ApprovalCtx,
+): void {
+  if (choice === prompt.exactLabel) {
+    persistRule(config, trimmedCommand, ctx);
+    return;
+  }
+
+  if (prompt.prefixLabel && choice === prompt.prefixLabel && prompt.suggested) {
+    persistRule(config, prompt.suggested, ctx);
+  }
+
+  // "Allow once" or already-present rule: just proceed.
 }
 
 export default function (pi: ExtensionAPI) {
@@ -255,36 +441,21 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType("bash", event)) {
-      return undefined;
+      return;
     }
 
     const command = String(event.input.command ?? "");
     const trimmedCommand = command.trim();
 
     if (!trimmedCommand) {
-      return undefined;
+      return;
     }
 
-    const segments = config.splitChains
-      ? splitCommand(command)
-      : [trimmedCommand];
-
-    const isMatch = (segment: string) =>
-      config.allowed.some((rule) => matchesPattern(segment, rule));
-
-    const allMatch = segments.length > 0 && segments.every(isMatch);
+    const { allMatch, failingSegment } = evaluateCommand(command, config);
 
     if (allMatch) {
-      return undefined;
+      return;
     }
-
-    // Base the prefix suggestion on the first segment that actually fails so
-    // that the offered "<prefix>:*" rule would unblock the command. Without
-    // this, a chain like `cd /some/path && git log ...` (where only `git log`
-    // is missing from the allow-list) would surface a useless
-    // `cd /some/path:*` suggestion derived from the head of the chain.
-    const failingSegment =
-      segments.find((segment) => !isMatch(segment)) ?? trimmedCommand;
 
     if (!ctx.hasUI) {
       return {
@@ -293,68 +464,17 @@ export default function (pi: ExtensionAPI) {
       };
     }
 
-    const exactLabel = `Allow always (exact): ${truncateForLabel(
-      trimmedCommand,
-      EXACT_LABEL_COMMAND_MAX_LENGTH,
-    )}`;
-    const suggested = suggestPrefixPattern(failingSegment);
-    const prefixLabel =
-      suggested &&
-      suggested !== trimmedCommand &&
-      !config.allowed.includes(suggested)
-        ? `Allow always: ${suggested}`
-        : null;
-
-    const options: string[] = ["Allow once"];
-
-    if (!config.allowed.includes(trimmedCommand)) {
-      options.push(exactLabel);
-    }
-
-    if (prefixLabel) {
-      options.push(prefixLabel);
-    }
-
-    options.push("Deny");
+    const prompt = buildPromptOptions(trimmedCommand, failingSegment, config);
 
     const choice = await ctx.ui.select(
       `Approve bash command?\n\n  ${trimmedCommand}`,
-      options,
+      prompt.options,
     );
 
-    if (!choice || choice === "Deny") {
-      return { block: true, reason: "Blocked by user" };
+    if (!choice || choice === DENY) {
+      return { block: true, reason: BLOCKED_BY_USER };
     }
 
-    if (choice === exactLabel) {
-      if (!config.allowed.includes(trimmedCommand)) {
-        config.allowed.push(trimmedCommand);
-
-        try {
-          saveConfig(config);
-          ctx.ui.notify(`Added rule: ${trimmedCommand}`, "info");
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(`Failed to persist rule: ${message}`, "error");
-        }
-      }
-    } else if (prefixLabel && choice === prefixLabel && suggested) {
-      if (!config.allowed.includes(suggested)) {
-        config.allowed.push(suggested);
-
-        try {
-          saveConfig(config);
-          ctx.ui.notify(`Added rule: ${suggested}`, "info");
-        } catch (error: unknown) {
-          const message =
-            error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(`Failed to persist rule: ${message}`, "error");
-        }
-      }
-    }
-
-    // "Allow once" or already-present rule: just proceed.
-    return undefined;
+    applyChoice(choice, trimmedCommand, prompt, config, ctx);
   });
 }

@@ -3,14 +3,24 @@ import { Box, Text } from "@mariozechner/pi-tui";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
+const TEXT_X = 0;
+const TEXT_Y = 0;
+const BOX_WIDTH = 1;
+const BOX_HEIGHT = 1;
+const SUCCESS_EXIT_CODE = 0;
+const NOT_FOUND_INDEX = -1;
+const RECENT_COMMITS_COUNT = "5";
+
 export default function (pi: ExtensionAPI) {
   pi.registerMessageRenderer("welcome", (message, _options, theme) => {
     const text = new Text(
       typeof message.content === "string" ? message.content : "Welcome",
-      0,
-      0,
+      TEXT_X,
+      TEXT_Y,
     );
-    const box = new Box(1, 1, (t) => theme.bg("customMessageBg", t));
+    const box = new Box(BOX_WIDTH, BOX_HEIGHT, (t) =>
+      theme.bg("customMessageBg", t),
+    );
     box.addChild(text);
     return box;
   });
@@ -24,30 +34,10 @@ export default function (pi: ExtensionAPI) {
       return;
     }
 
-    let output = "";
     const t = ctx.ui.theme;
+    let output = "";
 
-    // 1. package.json info
-    let pkgOutput = "";
-    const pkgPath = path.join(ctx.cwd, "package.json");
-    try {
-      const pkgRaw = await fs.readFile(pkgPath, "utf8");
-      const pkg = JSON.parse(pkgRaw) as Partial<{
-        name: string;
-        version: string;
-        description: string;
-      }>;
-
-      if (pkg.name) {
-        pkgOutput += `📦 ${t.bold(t.fg("accent", pkg.name))}${pkg.version ? t.fg("dim", ` v${pkg.version}`) : ""}\n`;
-      }
-      if (pkg.description) {
-        pkgOutput += `${t.italic(pkg.description)}\n`;
-      }
-    } catch {
-      // Ignore missing or invalid package.json
-    }
-
+    const pkgOutput = await buildPackageInfo(ctx.cwd, t);
     if (pkgOutput) {
       output += t.bg(
         "customMessageBg",
@@ -55,53 +45,7 @@ export default function (pi: ExtensionAPI) {
       );
     }
 
-    // 2. git info
-    let gitOutput = "";
-    try {
-      const branchResult = await pi.exec("git", ["branch", "--show-current"], {
-        cwd: ctx.cwd,
-      });
-      if (branchResult.code === 0) {
-        const branch = branchResult.stdout.trim();
-        if (branch) {
-          gitOutput += `🌿 ${t.fg("accent", branch)}\n`;
-        }
-
-        const diffResult = await pi.exec("git", ["diff", "--shortstat"], {
-          cwd: ctx.cwd,
-        });
-        if (diffResult.code === 0 && diffResult.stdout.trim()) {
-          gitOutput += `📊 ${t.fg("warning", diffResult.stdout.trim())}\n`;
-        } else {
-          gitOutput += `📊 ${t.fg("success", "Clean working directory")}\n`;
-        }
-
-        const logResult = await pi.exec(
-          "git",
-          ["log", "-n", "5", "--oneline"],
-          { cwd: ctx.cwd },
-        );
-        if (logResult.code === 0 && logResult.stdout.trim()) {
-          gitOutput += "\n📜 Recent Commits:\n";
-          gitOutput += logResult.stdout
-            .trim()
-            .split("\n")
-            .map((line) => {
-              const spaceIdx = line.indexOf(" ");
-              if (spaceIdx === -1) {
-                return `  ${line}`;
-              }
-              const hash = line.slice(0, spaceIdx);
-              const msg = line.slice(spaceIdx + 1);
-              return `  ${t.fg("dim", hash)} ${msg}`;
-            })
-            .join("\n");
-        }
-      }
-    } catch {
-      // Ignore missing git
-    }
-
+    const gitOutput = await buildGitInfo(pi, ctx.cwd, t);
     if (gitOutput) {
       if (output) output += "\n";
       output += t.bg(
@@ -118,4 +62,87 @@ export default function (pi: ExtensionAPI) {
       });
     }
   });
+}
+
+async function buildPackageInfo(
+  cwd: string,
+  t: {
+    bold: (s: string) => string;
+    italic: (s: string) => string;
+    fg: (c: any, s: string) => string;
+  },
+): Promise<string> {
+  let pkgOutput = "";
+  const pkgPath = path.join(cwd, "package.json");
+  try {
+    const pkgRaw = await fs.readFile(pkgPath, "utf8");
+    const pkg = JSON.parse(pkgRaw) as Partial<{
+      name: string;
+      version: string;
+      description: string;
+    }>;
+
+    if (pkg.name) {
+      pkgOutput += `📦 ${t.bold(t.fg("accent", pkg.name))}${pkg.version ? t.fg("dim", ` v${pkg.version}`) : ""}\n`;
+    }
+    if (pkg.description) {
+      pkgOutput += `${t.italic(pkg.description)}\n`;
+    }
+  } catch {
+    // Ignore missing or invalid package.json
+  }
+  return pkgOutput;
+}
+
+async function buildGitInfo(
+  pi: ExtensionAPI,
+  cwd: string,
+  t: { fg: (c: any, s: string) => string },
+): Promise<string> {
+  let gitOutput = "";
+  try {
+    const branchResult = await pi.exec("git", ["branch", "--show-current"], {
+      cwd,
+    });
+    if (branchResult.code !== SUCCESS_EXIT_CODE) {
+      return gitOutput;
+    }
+
+    const branch = branchResult.stdout.trim();
+    if (branch) {
+      gitOutput += `🌿 ${t.fg("accent", branch)}\n`;
+    }
+
+    const diffResult = await pi.exec("git", ["diff", "--shortstat"], { cwd });
+    if (diffResult.code === SUCCESS_EXIT_CODE && diffResult.stdout.trim()) {
+      gitOutput += `📊 ${t.fg("warning", diffResult.stdout.trim())}\n`;
+    } else {
+      gitOutput += `📊 ${t.fg("success", "Clean working directory")}\n`;
+    }
+
+    const logResult = await pi.exec(
+      "git",
+      ["log", "-n", RECENT_COMMITS_COUNT, "--oneline"],
+      { cwd },
+    );
+    if (logResult.code === SUCCESS_EXIT_CODE && logResult.stdout.trim()) {
+      gitOutput += "\n📜 Recent Commits:\n";
+      gitOutput += logResult.stdout
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const spaceIdx = line.indexOf(" ");
+          if (spaceIdx === NOT_FOUND_INDEX) {
+            return `  ${line}`;
+          }
+          const hash = line.slice(0, spaceIdx);
+          const msg = line.slice(spaceIdx + 1);
+          return `  ${t.fg("dim", hash)} ${msg}`;
+        })
+        .join("\n");
+    }
+  } catch {
+    // Ignore missing git
+  }
+  return gitOutput;
 }

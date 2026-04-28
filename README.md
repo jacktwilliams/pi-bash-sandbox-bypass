@@ -116,6 +116,22 @@ risks misreads, and explicit "clarify / repeat that" requests — then resume
 caveman after the clear part is done. Code, commits, and PR text are always
 written in normal English.
 
+### `welcome-message.ts`
+
+Displays a custom workspace summary block in the UI at the start of a session.
+
+When pi starts in an interactive UI context (`ctx.hasUI === true`), this extension renders a welcome message with:
+
+- **Package Info**: The project name and version from `package.json` (if present).
+- **Git Context**: The current branch, working directory status (clean or dirty with shortstat), and the last 5 commits.
+
+The output uses custom UI components and theme colors (e.g., `customMessageBg`, `toolPendingBg`) for distinct visual sections.
+
+#### Hooks
+
+- `session_start` — Gathers `package.json` and git data via `pi.exec`, then emits a custom message using `pi.sendMessage`.
+- `registerMessageRenderer("welcome")` — Defines the TUI rendering logic for the custom message type.
+
 ### `bash-approval.ts`
 
 See [bash-approval.ts](bash-approval.ts) and

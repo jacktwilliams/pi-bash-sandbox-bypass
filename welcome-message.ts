@@ -28,6 +28,7 @@ export default function (pi: ExtensionAPI) {
     const t = ctx.ui.theme;
 
     // 1. package.json info
+    let pkgOutput = "";
     const pkgPath = path.join(ctx.cwd, "package.json");
     try {
       const pkgRaw = await fs.readFile(pkgPath, "utf8");
@@ -38,19 +39,24 @@ export default function (pi: ExtensionAPI) {
       }>;
 
       if (pkg.name) {
-        output += `📦 ${t.bold(t.fg("accent", pkg.name))}${pkg.version ? t.fg("dim", ` v${pkg.version}`) : ""}\n`;
+        pkgOutput += `📦 ${t.bold(t.fg("accent", pkg.name))}${pkg.version ? t.fg("dim", ` v${pkg.version}`) : ""}\n`;
       }
       if (pkg.description) {
-        output += `${t.italic(pkg.description)}\n`;
-      }
-      if (pkg.name || pkg.description) {
-        output += "\n";
+        pkgOutput += `${t.italic(pkg.description)}\n`;
       }
     } catch {
       // Ignore missing or invalid package.json
     }
 
+    if (pkgOutput) {
+      output += t.bg(
+        "customMessageBg",
+        `\n ${pkgOutput.trim().replace(/\n/g, "\n ")} \n`,
+      );
+    }
+
     // 2. git info
+    let gitOutput = "";
     try {
       const branchResult = await pi.exec("git", ["branch", "--show-current"], {
         cwd: ctx.cwd,
@@ -58,18 +64,17 @@ export default function (pi: ExtensionAPI) {
       if (branchResult.code === 0) {
         const branch = branchResult.stdout.trim();
         if (branch) {
-          output += `🌿 ${t.fg("accent", branch)}\n`;
+          gitOutput += `🌿 ${t.fg("accent", branch)}\n`;
         }
 
         const diffResult = await pi.exec("git", ["diff", "--shortstat"], {
           cwd: ctx.cwd,
         });
         if (diffResult.code === 0 && diffResult.stdout.trim()) {
-          output += `📊 ${t.fg("warning", diffResult.stdout.trim())}\n`;
+          gitOutput += `📊 ${t.fg("warning", diffResult.stdout.trim())}\n`;
         } else {
-          output += `📊 ${t.fg("success", "Clean working directory")}\n`;
+          gitOutput += `📊 ${t.fg("success", "Clean working directory")}\n`;
         }
-        output += "\n";
 
         const logResult = await pi.exec(
           "git",
@@ -77,8 +82,8 @@ export default function (pi: ExtensionAPI) {
           { cwd: ctx.cwd },
         );
         if (logResult.code === 0 && logResult.stdout.trim()) {
-          output += "📜 Recent Commits:\n";
-          output += logResult.stdout
+          gitOutput += "\n📜 Recent Commits:\n";
+          gitOutput += logResult.stdout
             .trim()
             .split("\n")
             .map((line) => {
@@ -91,11 +96,18 @@ export default function (pi: ExtensionAPI) {
               return `  ${t.fg("dim", hash)} ${msg}`;
             })
             .join("\n");
-          output += "\n";
         }
       }
     } catch {
       // Ignore missing git
+    }
+
+    if (gitOutput) {
+      if (output) output += "\n";
+      output += t.bg(
+        "toolPendingBg",
+        `\n ${gitOutput.trim().replace(/\n/g, "\n ")} \n`,
+      );
     }
 
     if (output.trim()) {

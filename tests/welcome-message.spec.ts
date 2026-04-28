@@ -231,6 +231,6 @@ describe("welcome-message extension", () => {
 
     const callArgs = (pi.sendMessage as jest.Mock<any>).mock
       .calls[0]![0] as any;
-    expect(callArgs.content).toContain("  abc1234\n  def5678");
+    expect(callArgs.content).toContain("  abc1234\n   def5678");
   });
 });

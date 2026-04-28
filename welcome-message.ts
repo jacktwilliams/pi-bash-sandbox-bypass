@@ -41,7 +41,7 @@ export default function (pi: ExtensionAPI) {
     if (pkgOutput) {
       output += t.bg(
         "customMessageBg",
-        `\n ${pkgOutput.trim().replace(/\n/g, "\n ")} \n`,
+        ` ${pkgOutput.trim().replace(/\n/g, "\n ")} `,
       );
     }
 
@@ -50,7 +50,7 @@ export default function (pi: ExtensionAPI) {
       if (output) output += "\n";
       output += t.bg(
         "toolPendingBg",
-        `\n ${gitOutput.trim().replace(/\n/g, "\n ")} \n`,
+        ` ${gitOutput.trim().replace(/\n/g, "\n ")} `,
       );
     }
 

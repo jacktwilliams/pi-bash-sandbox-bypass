@@ -47,8 +47,8 @@ const VALID_LEVELS = [
 type Level = (typeof VALID_LEVELS)[number];
 
 type CavemanState = {
-  enabled: boolean;
-  level: Level;
+  readonly enabled: boolean;
+  readonly level: Level;
 };
 
 const DEFAULT_STATE: CavemanState = {
@@ -108,6 +108,7 @@ function loadSkillContent(): string | null {
   try {
     return fs.readFileSync(SKILL_PATH, "utf8");
   } catch {
+    // All I/O errors (ENOENT, permission, etc.) have the same recovery: return null.
     return null;
   }
 }
@@ -153,11 +154,11 @@ export default function (pi: ExtensionAPI) {
 
   pi.on("before_agent_start", (event) => {
     if (!state.enabled) {
-      return undefined;
+      return;
     }
 
     if (!skillContent) {
-      return undefined;
+      return;
     }
 
     return {
@@ -169,17 +170,18 @@ export default function (pi: ExtensionAPI) {
   pi.registerCommand("caveman", {
     description:
       "Toggle caveman mode and switch intensity (lite/full/ultra/wenyan-*/off/update)",
-    getArgumentCompletions: (prefix: string) => {
+    getArgumentCompletions: (prefix) => {
       const items = COMMAND_TOKENS.map((value) => ({ value, label: value }));
-      const filtered = items.filter((item) => item.value.startsWith(prefix));
+      const filtered = items.filter(({ value }) => value.startsWith(prefix));
       return filtered.length > 0 ? filtered : null;
     },
     handler: async (args, ctx) => {
+      const { ui } = ctx;
       const arg = (args ?? "").trim();
 
       if (!arg || arg === "status") {
         const skillStatus = skillContent ? "loaded" : "MISSING";
-        ctx.ui.notify(`${statusLine(state)} (SKILL.md ${skillStatus})`, "info");
+        ui.notify(`${statusLine(state)} (SKILL.md ${skillStatus})`, "info");
         return;
       }
 
@@ -191,20 +193,17 @@ export default function (pi: ExtensionAPI) {
         } catch (error: unknown) {
           const message =
             error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(
-            `caveman: failed to persist state: ${message}`,
-            "error",
-          );
+          ui.notify(`caveman: failed to persist state: ${message}`, "error");
           return;
         }
 
-        ctx.ui.setStatus("caveman", statusLine(state));
-        ctx.ui.notify("caveman OFF", "info");
+        ui.setStatus("caveman", statusLine(state));
+        ui.notify("caveman OFF", "info");
         return;
       }
 
       if (arg === "update") {
-        ctx.ui.notify("caveman: updating from upstream...", "info");
+        ui.notify("caveman: updating from upstream...", "info");
 
         try {
           const hasGitDir = fs.existsSync(path.join(UPSTREAM_DIR, ".git"));
@@ -219,7 +218,7 @@ export default function (pi: ExtensionAPI) {
 
             if (result.code !== 0) {
               const stderr = result.stderr.trim() || result.stdout.trim();
-              ctx.ui.notify(`caveman: update failed: ${stderr}`, "error");
+              ui.notify(`caveman: update failed: ${stderr}`, "error");
               return;
             }
           } else {
@@ -234,7 +233,7 @@ export default function (pi: ExtensionAPI) {
 
             if (result.code !== 0) {
               const stderr = result.stderr.trim() || result.stdout.trim();
-              ctx.ui.notify(`caveman: clone failed: ${stderr}`, "error");
+              ui.notify(`caveman: clone failed: ${stderr}`, "error");
               return;
             }
           }
@@ -242,18 +241,18 @@ export default function (pi: ExtensionAPI) {
           skillContent = loadSkillContent();
 
           if (!skillContent) {
-            ctx.ui.notify(
+            ui.notify(
               `caveman: updated, but SKILL.md not found at ${SKILL_PATH}`,
               "warning",
             );
             return;
           }
 
-          ctx.ui.notify("caveman: SKILL.md updated", "info");
+          ui.notify("caveman: SKILL.md updated", "info");
         } catch (error: unknown) {
           const message =
             error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(`caveman: update failed: ${message}`, "error");
+          ui.notify(`caveman: update failed: ${message}`, "error");
         }
 
         return;
@@ -267,19 +266,16 @@ export default function (pi: ExtensionAPI) {
         } catch (error: unknown) {
           const message =
             error instanceof Error ? error.message : String(error);
-          ctx.ui.notify(
-            `caveman: failed to persist state: ${message}`,
-            "error",
-          );
+          ui.notify(`caveman: failed to persist state: ${message}`, "error");
           return;
         }
 
-        ctx.ui.setStatus("caveman", statusLine(state));
-        ctx.ui.notify(`caveman ON (${state.level})`, "info");
+        ui.setStatus("caveman", statusLine(state));
+        ui.notify(`caveman ON (${state.level})`, "info");
         return;
       }
 
-      ctx.ui.notify(
+      ui.notify(
         `caveman: unknown arg "${arg}". Try one of: ${COMMAND_TOKENS.join(", ")}`,
         "warning",
       );

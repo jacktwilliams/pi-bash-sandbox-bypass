@@ -39,19 +39,13 @@ export default function (pi: ExtensionAPI) {
 
     const pkgOutput = await buildPackageInfo(ctx.cwd, t);
     if (pkgOutput) {
-      output += t.bg(
-        "customMessageBg",
-        ` ${pkgOutput.trim().replace(/\n/g, "\n ")} `,
-      );
+      output += `${pkgOutput.trim()}\n`;
     }
 
     const gitOutput = await buildGitInfo(pi, ctx.cwd, t);
     if (gitOutput) {
       if (output) output += "\n";
-      output += t.bg(
-        "toolPendingBg",
-        ` ${gitOutput.trim().replace(/\n/g, "\n ")} `,
-      );
+      output += `${gitOutput.trim()}\n`;
     }
 
     if (output.trim()) {

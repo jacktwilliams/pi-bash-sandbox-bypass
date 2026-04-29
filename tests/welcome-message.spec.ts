@@ -129,7 +129,7 @@ describe("welcome-message extension", () => {
 
     expect(pi.sendMessage).toHaveBeenCalledWith({
       customType: "welcome",
-      content: expect.stringContaining("**<accent>test-app</accent>**"),
+      content: expect.stringContaining("**<mdHeading>test-app</mdHeading>**"),
       display: true,
     });
 

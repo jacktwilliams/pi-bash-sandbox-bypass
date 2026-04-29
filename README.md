@@ -7,31 +7,12 @@ solely to give VSCode/tsserver type resolution and to host dev tooling.
 > Do **not** add a `pi.extensions` field to `package.json` — that would
 > override pi's auto-discovery.
 
-## Setup
-
-Install dev dependencies:
-
-```sh
-npm install
-```
-
-## Scripts
-
-- `npm run typecheck` — run `tsc --noEmit`
-- `npm test` — run jest
-- `npm run test:coverage` — jest with coverage
-- `npm run lint` — eslint (auto-fix) over root and `tests/` `.ts` files
-- `npm run lint:file <path>` — eslint (auto-fix) on a single file
-- `npm run format` — prettier `--write` over `**/*.{ts,js,cjs,md,json}`
-- `npm run format:file <path>` — prettier `--write` on a single file
-
 ## `caveman.ts`
 
-Always-on **caveman mode**: prepends the upstream caveman ruleset to the system
-prompt every turn so the model speaks like a smart caveman and burns ~75%
-fewer output tokens. Wraps [JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman)
-as a pi extension instead of a passive skill — a pi skill would only inject
-its `description`, not the full ruleset, which defeats the purpose.
+Always-on **caveman mode**: prepends the upstream
+[JuliusBrussee/caveman](https://github.com/JuliusBrussee/caveman) ruleset to
+the system prompt every turn so the model speaks like a smart caveman and
+burns ~75% fewer output tokens.
 
 ### Install
 
@@ -41,25 +22,10 @@ First run fetches the upstream repo:
 /caveman update
 ```
 
-This clones `https://github.com/JuliusBrussee/caveman.git` into
-`~/.pi/agent/caveman/upstream/` (shallow, depth 1). Re-running
-`/caveman update` does a `git pull --ff-only` against that checkout.
-
-If `SKILL.md` is missing on session start, the extension surfaces a warning
-telling you to run `/caveman update`. Injection is skipped in that state —
-pi keeps working normally.
-
-### Data layout
-
-```
-~/.pi/agent/caveman/
-├── state.json                          # { enabled, level } persisted across sessions
-└── upstream/                           # cloned upstream repo
-    └── skills/caveman/SKILL.md         # ruleset injected each turn
-```
-
-`state.json` is created with defaults (`{ enabled: true, level: "full" }`) on
-first run. Edit via the `/caveman` command, not by hand.
+This clones into `~/.pi/agent/caveman/upstream/`. Re-running `/caveman
+update` pulls the latest. If the ruleset is missing on session start, the
+extension warns you to run `/caveman update` and skips injection until you
+do — pi keeps working normally.
 
 ### Slash commands
 
@@ -76,16 +42,8 @@ first run. Edit via the `/caveman` command, not by hand.
 | `/caveman update`               | `git clone` (first run) or `git pull --ff-only` upstream repo                    |
 
 Argument completion is wired up — typing `/caveman ` and tabbing cycles
-through the valid tokens above.
-
-### Hooks
-
-- `session_start` — loads `SKILL.md` into memory, sets the status bar entry
-  (`🪨 caveman <level>` or `🪨 caveman off`), warns if `SKILL.md` is missing.
-- `before_agent_start` — when enabled and skill is loaded, appends a
-  `<caveman-mode active level="…">…</caveman-mode>` block to
-  `event.systemPrompt`. Returns `undefined` (no-op) when disabled or skill
-  missing.
+through the valid tokens above. Status bar shows `🪨 caveman <level>` or
+`🪨 caveman off`.
 
 ### Switching off mid-session
 
@@ -116,19 +74,24 @@ written in normal English.
 
 ## `welcome-message.ts`
 
-Displays a custom workspace summary block in the UI at the start of a session.
+Shows a workspace summary in the UI when a session starts. Only runs on real
+startup in an interactive UI — `/clear`, forks, and headless (`pi -p`) runs
+are silent. Sections with nothing to show are dropped; if every section is
+empty, no message appears.
 
-When pi starts in an interactive UI context (`ctx.hasUI === true`), this extension renders a welcome message with:
+The summary covers:
 
-- **Package Info**: The project name and version from `package.json` (if present).
-- **Git Context**: The current branch, working directory status (clean or dirty with shortstat), and the last 5 commits.
+- **📦 Package** — name, version, and description from `package.json`.
+- **🌿 Git** — current branch, working-tree status (clean, or a dirty
+  shortstat), and the last 5 commits.
+- **Resources** — three optional lists of what's available in this session:
+  - `[Skills]` — registered skill commands.
+  - `[Prompts]` — registered prompt commands.
+  - `[Extensions]` — extensions installed locally in
+    `~/.pi/agent/extensions/` plus any `packages` entries from
+    `~/.pi/agent/settings.json`.
 
-The output uses custom UI components and theme colors (e.g., `customMessageBg`, `toolPendingBg`) for distinct visual sections.
-
-### Hooks
-
-- `session_start` — Gathers `package.json` and git data via `pi.exec`, then emits a custom message using `pi.sendMessage`.
-- `registerMessageRenderer("welcome")` — Defines the TUI rendering logic for the custom message type.
+No config, no slash commands — drop the file in and it runs.
 
 ## `bash-approval.ts`
 
@@ -139,10 +102,9 @@ commands are blocked outright with a reason pointing at the config file.
 
 ### Config
 
-Lives at `~/.pi/agent/bash-approval.json`. Created with defaults on first run
-(ENOENT → write `{ "allowed": [], "splitChains": true }`). Malformed JSON or
-other read errors fall back to the in-memory default — pi keeps working, every
-command just prompts.
+Lives at `~/.pi/agent/bash-approval.json`. Created with sensible defaults on
+first run. If the file is malformed, every command just prompts — pi keeps
+working.
 
 ```json
 {
@@ -165,12 +127,10 @@ trailing space, so `git status:*` does **not** accidentally match
 `git statusfoo`. The bare-`*` form is a raw prefix match — use sparingly.
 
 **`splitChains`** (default `true`): split incoming commands on shell
-separators (`&&`, `||`, `;`, `|`, newline) — respecting single/double quotes
-and backslash escapes — and require **every** segment to match the allow-list.
-A chain like `cd foo && git log` only runs unprompted when both `cd foo` and
-`git log` resolve to allow-list entries. Set `false` to match the entire
-command string as one unit. The splitter is a pragmatic shell-ish parser, not
-a full POSIX one — good enough for the commands the agent actually emits.
+separators (`&&`, `||`, `;`, `|`, newline) and require **every** segment to
+match the allow-list. A chain like `cd foo && git log` only runs unprompted
+when both `cd foo` and `git log` are allow-listed. Set `false` to match the
+entire command string as one unit.
 
 ### Approval prompt
 
@@ -190,10 +150,8 @@ On a non-matching command in interactive mode, the user picks from:
   already on the list.
 - **Deny** — block with reason `Blocked by user`.
 
-Selecting nothing (cancel) is treated as deny. Persisted rules are written
-back to `bash-approval.json` immediately; write failures surface via
-`ctx.ui.notify(..., "error")` and the rule is dropped from the in-memory
-config too.
+Selecting nothing (cancel) is treated as deny. "Allow always" choices are
+persisted to `bash-approval.json` immediately.
 
 ### Slash commands
 
@@ -202,19 +160,14 @@ config too.
 | `/bash-approval-reload` | Re-read `~/.pi/agent/bash-approval.json` from disk (use after editing by hand). |
 | `/bash-approval-list`   | Show currently allowed bash patterns.                                           |
 
-### Hooks
-
-- `tool_call` — only acts on `bash` tool calls (via `isToolCallEventType`).
-  Empty/whitespace commands fall through. Matching commands fall through.
-  Non-matching commands either block (no UI) or prompt and apply the user's
-  choice.
-
 ## `user-select.ts`
 
 Registers a `user_select` tool the LLM (or skills) can call to ask the human
 a multiple-choice question. Use whenever a workflow needs explicit user
 input to disambiguate, confirm, or pick between mutually exclusive paths
 instead of guessing.
+
+No config, no slash commands — drop the file in and the tool is available.
 
 ### Tool schema
 
@@ -262,8 +215,3 @@ Tool result content is a short, LLM-friendly string:
 
 `details` exposes the structured form (`question`, `options`, `answer`,
 `wasCustom`, `cancelled`) for renderers and downstream skills.
-
-### Hooks
-
-None. The extension only registers the `user_select` tool; there is no
-config file and no slash commands.

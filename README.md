@@ -75,7 +75,7 @@ written in normal English.
 ## `welcome-message.ts`
 
 Shows a workspace summary in the UI when a session starts. Only runs on real
-startup in an interactive UI — `/clear`, forks, and headless (`pi -p`) runs
+startup in an interactive UI — `/new`, forks, and headless (`pi -p`) runs
 are silent. Sections with nothing to show are dropped; if every section is
 empty, no message appears.
 

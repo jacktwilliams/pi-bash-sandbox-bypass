@@ -1,22 +1,29 @@
 {
   "name": "pi-extensions",
   "private": true,
-  "description": "Editor/tooling workspace for personal pi extensions. Pi auto-discovers *.ts files in this directory at runtime; the package.json + tsconfig.json + node_modules/ here exist solely to give VSCode/tsserver type-resolution and to host dev tooling. Do NOT add a `pi.extensions` field — that would override pi's auto-discovery.",
+  "description": "Monorepo workspace for personal Pi extensions and publishable packages.",
+  "workspaces": [
+    "packages/*"
+  ],
   "scripts": {
     "setup": "npm install --no-audit --no-fund",
-    "typecheck": "node_modules/.bin/tsc --noEmit",
+    "typecheck": "node_modules/.bin/tsc -p tsconfig.typecheck.json --noEmit",
     "test": "node_modules/.bin/jest",
     "test:coverage": "node_modules/.bin/jest --coverage",
-    "format": "prettier '**/*.{ts,js,cjs,md,json}' --write",
+    "format": "prettier '**/*.{ts,js,cjs,md,json,yml,yaml}' --write",
     "format:file": "prettier --write",
-    "lint": "eslint '*.ts' 'tests/**/*.ts' --fix",
+    "lint": "eslint '*.ts' 'packages/*/extensions/**/*.ts' 'packages/*/tests/**/*.ts' --fix",
     "lint:file": "eslint --fix",
     "organize-imports": "git ls-files '*.ts' | xargs organize-imports-cli",
     "organize-imports:file": "organize-imports-cli",
     "lint-staged": "lint-staged",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish",
     "prepare": "husky"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.29.6",
     "@jest/globals": "^29.7.0",
     "@mariozechner/pi-coding-agent": "0.70.2",
     "@types/node": "^20.14.0",
@@ -38,10 +45,10 @@
       "organize-imports-cli",
       "eslint --fix"
     ],
-    "tests/**/*.ts": [
+    "packages/*/{extensions,tests}/**/*.ts": [
       "organize-imports-cli",
       "eslint --fix"
     ],
-    "*.{ts,js,cjs,md,json}": "prettier --write"
+    "*.{ts,js,cjs,md,json,yml,yaml}": "prettier --write"
   }
 }

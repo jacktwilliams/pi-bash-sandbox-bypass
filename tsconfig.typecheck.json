@@ -1,0 +1,12 @@
+{
+  "extends": "./tsconfig.base.json",
+  "compilerOptions": {
+    "isolatedModules": true
+  },
+  "include": [
+    "*.ts",
+    "packages/*/extensions/**/*.ts",
+    "packages/*/tests/**/*.ts"
+  ],
+  "exclude": ["**/node_modules", "coverage"]
+}

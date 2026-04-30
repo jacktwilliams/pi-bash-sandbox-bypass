@@ -64,7 +64,7 @@ function setup() {
   };
 
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../welcome-message") as {
+  const mod = require("../extensions") as {
     default: (pi: unknown) => void;
   };
   mod.default(pi as any);

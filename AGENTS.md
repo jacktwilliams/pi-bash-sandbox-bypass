@@ -9,18 +9,21 @@ npm install                    # Install dev dependencies (run once after clone,
                                # Also installs the husky pre-commit hook via the `prepare` script.
 
 # Development
-npm run typecheck              # tsc --noEmit
+npm run typecheck              # tsc -b over workspace project references
 npm test                       # jest
 npm run test:coverage          # jest with coverage report (HTML in coverage/)
-npm run lint                   # eslint --fix over root .ts and tests/**/*.ts
+npm run lint                   # eslint --fix over root shims + packages/*/{extensions,tests}
 npm run lint:file <path>       # eslint --fix on a single file
-npm run format                 # prettier --write over **/*.{ts,js,cjs,md,json}
+npm run format                 # prettier --write over **/*.{ts,js,cjs,md,json,yml,yaml}
 npm run format:file <path>     # prettier --write on a single file
 npm run organize-imports       # organize-imports-cli over all tracked .ts files (via git ls-files)
 npm run organize-imports:file <path>  # organize-imports-cli on a single file
+npm run changeset              # create a changeset entry for changed package(s)
+npm run changeset:version      # apply changesets and bump versions
+npm run changeset:publish      # publish packages from changesets
 ```
 
-There is no build step. Pi auto-discovers `*.ts` files at runtime; `tsc` is configured with `noEmit: true` purely for type-checking.
+There is no build step. Pi loads `.ts` extension files directly.
 
 **Pre-commit hook** (`.husky/pre-commit`) runs `npx lint-staged && npm run typecheck && npm test`. For staged `.ts` files lint-staged runs `organize-imports-cli` (sorts/removes unused imports via the TS language service) and then `eslint --fix`; for staged `.{ts,js,cjs,md,json}` files it runs `prettier --write` (see `lint-staged` config in [package.json](package.json)).
 
@@ -28,29 +31,35 @@ There is no build step. Pi auto-discovers `*.ts` files at runtime; `tsc` is conf
 
 ```
 .
-├── <name>.ts              # Single-file extensions (auto-discovered by pi)
-├── <name>/index.ts        # Multi-file extensions (auto-discovered by pi)
-├── tests/
-│   └── <name>.spec.ts     # Jest specs — kept under tests/ so pi does not
-│                          # try to load them as extensions at runtime
-├── .husky/pre-commit      # lint-staged + typecheck + tests, installed by `npm install`
-├── .eslintrc.js           # ESLint (legacy config) + @typescript-eslint + prettier integration
-├── .eslintignore          # ESLint ignores (coverage, node_modules, JS configs)
-├── .prettierrc            # Prettier config
-├── .prettierignore        # Prettier ignores (coverage, node_modules, package-lock.json)
-├── jest.config.cjs        # Jest config (ts-jest preset)
-├── tsconfig.json          # Strict TS, ES2022, NodeNext, noUncheckedIndexedAccess
-├── package.json           # Dev tooling only — must NOT have a `pi.extensions` field
-└── README.md              # Workspace overview
+├── <name>.ts                         # Root shim that re-exports package entry for local auto-discovery
+├── packages/
+│   ├── pi-<feature>/
+│   │   ├── extensions/
+│   │   │   ├── index.ts              # Extension entrypoint (default export)
+│   │   │   ├── types.ts              # Package-local types
+│   │   │   └── utils.ts              # Package-local helpers (or utils/*)
+│   │   ├── tests/
+│   │   │   └── <feature>.spec.ts     # Jest specs colocated with package
+│   │   ├── package.json              # Publishable npm package metadata
+│   │   └── tsconfig.json             # Package TS project (composite)
+├── .changeset/                       # Changesets config + release metadata
+├── .github/workflows/release.yml     # Changesets release workflow
+├── .husky/pre-commit                 # lint-staged + typecheck + tests
+├── .eslintrc.js                      # ESLint (legacy config) + @typescript-eslint + prettier integration
+├── jest.config.cjs                   # Workspace Jest config
+├── tsconfig.base.json                # Shared TS compiler options
+├── tsconfig.json                     # Root project references + root shim files
+├── package.json                      # Workspace tooling + npm workspaces config
+└── README.md                         # Workspace overview
 ```
 
-> **Do not** add a `pi.extensions` field to `package.json` — that would override pi's auto-discovery and silently disable every extension that isn't listed there.
+> **Do not** add a `pi.extensions` field to root `package.json` — that would override pi's auto-discovery and silently disable extensions not listed there.
 
 ## Architecture
 
-This repo is a personal workspace for pi (`@mariozechner/pi-coding-agent`) extensions. Each extension is a single TypeScript file (or `<name>/index.ts`) with a default export of `(pi: ExtensionAPI) => void`. Pi loads it on startup; the extension registers commands and event hooks against the `ExtensionAPI`.
+This repo is a workspace for pi (`@mariozechner/pi-coding-agent`) extension packages. Source-of-truth implementations live in `packages/pi-*/extensions/index.ts`; root `<name>.ts` files are shims for local auto-discovery. Each extension entry exports `(pi: ExtensionAPI) => void` and registers commands/hooks against the `ExtensionAPI`.
 
-**Extension hooks in use** (see [bash-approval.ts](bash-approval.ts) for the canonical example):
+**Extension hooks in use** (see [packages/pi-bash-approval/extensions/index.ts](packages/pi-bash-approval/extensions/index.ts) for the canonical example):
 
 - `pi.registerCommand(name, { description, handler })` — adds a `/<name>` slash command
 - `pi.on("tool_call", handler)` — intercepts tool calls; fall through (bare `return`) to allow, `{ block: true, reason }` to deny
@@ -64,14 +73,14 @@ This repo is a personal workspace for pi (`@mariozechner/pi-coding-agent`) exten
 
 ## Testing
 
-Tests use Jest + ts-jest and live under `tests/<feature>.spec.ts`. They are kept out of the workspace root specifically so pi's auto-discovery doesn't try to load them as extensions at runtime (`testMatch` and the `tsconfig.json` `include` keep this boundary explicit — don't move spec files to the root).
+Tests use Jest + ts-jest and live under `packages/<pkg>/tests/<feature>.spec.ts`. Keeping tests inside package-local `tests/` directories avoids pi extension auto-discovery (`testMatch` and per-package `tsconfig.json` include patterns keep this boundary explicit).
 
 **Conventions**:
 
 - One spec file per extension, named to match.
 - Mock `@mariozechner/pi-coding-agent` with `jest.mock(..., { virtual: true })` — it's ESM-only and Jest's CJS resolver can't load it. Stub only the helpers your extension imports (e.g. `isToolCallEventType`).
 - Mock `node:fs` rather than touching the real filesystem.
-- Provide a `setup()` helper that resets modules, applies fs mocks, calls the extension's default export against a fake `pi` API, and returns the recorded `tool_call` handler and registered commands. See [tests/bash-approval.spec.ts](tests/bash-approval.spec.ts) for the canonical pattern.
+- Provide a `setup()` helper that resets modules, applies fs mocks, calls the extension's default export against a fake `pi` API, and returns the recorded `tool_call` handler and registered commands. See [packages/pi-bash-approval/tests/bash-approval.spec.ts](packages/pi-bash-approval/tests/bash-approval.spec.ts) for the canonical pattern.
 - Build a `makeCtx()` helper that returns `{ ctx, notify, select }` with `ctx.hasUI` togglable and `select` driven by an injected `pick` function — this keeps interactive tests readable.
 
 **Coverage**: thresholds are 80% lines/branches/functions/statements. New extensions should be added to `collectCoverageFrom` in [jest.config.cjs](jest.config.cjs).
@@ -156,8 +165,9 @@ ctx.ui.notify("done", "info"); // floating promise
 
 ### Naming
 
-- Extensions: `<feature>.ts` at the workspace root (or `<feature>/index.ts` for multi-file extensions)
-- Tests: `tests/<feature>.spec.ts` — exactly one spec file per extension
+- Root shims: `<feature>.ts` at workspace root (re-export package entrypoint)
+- Package extension entrypoint: `packages/pi-<feature>/extensions/index.ts`
+- Tests: `packages/pi-<feature>/tests/<feature>.spec.ts` — exactly one spec file per extension package
 - Config files: `~/.pi/agent/<feature>.json`
 - Slash commands: `<feature>-<verb>` (e.g. `bash-approval-reload`, `bash-approval-list`)
 - Prefix unused parameters with `_` (e.g. `(_args, ctx) => …`)
@@ -427,7 +437,7 @@ const command = String(
 4. Register slash commands via `pi.registerCommand` — at minimum a `<feature>-reload` if the extension is config-driven.
 5. Register event hooks via `pi.on(...)`. Always early-return (bare `return;`) for events you don't handle.
 6. Handle `ctx.hasUI === false` explicitly — pick a safe default (typically: block / no-op) for non-interactive runs.
-7. Add `tests/<feature>.spec.ts` (see Testing).
+7. Add `packages/pi-<feature>/tests/<feature>.spec.ts` (see Testing).
 8. Run `npm run typecheck && npm test` before committing.
 
 **Skeleton**:

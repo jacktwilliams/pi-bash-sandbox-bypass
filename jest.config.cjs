@@ -3,18 +3,17 @@ module.exports = {
   preset: "ts-jest",
   testEnvironment: "node",
   rootDir: __dirname,
-  // Test files live under tests/ so pi's auto-discovery (which loads
-  // *.ts at the root and */index.ts in subdirectories) ignores them.
-  testMatch: ["<rootDir>/tests/**/*.spec.ts"],
+  testMatch: ["<rootDir>/packages/*/tests/**/*.spec.ts"],
   transform: {
-    "^.+\\.tsx?$": ["ts-jest", { diagnostics: false }],
+    "^.+\\.tsx?$": [
+      "ts-jest",
+      {
+        diagnostics: false,
+        tsconfig: "<rootDir>/tsconfig.typecheck.json",
+      },
+    ],
   },
-  collectCoverageFrom: [
-    "bash-approval.ts",
-    "caveman.ts",
-    "user-select.ts",
-    "welcome-message.ts",
-  ],
+  collectCoverageFrom: ["packages/*/extensions/**/*.ts"],
   coverageDirectory: "<rootDir>/coverage",
   coverageThreshold: {
     global: {

@@ -122,7 +122,7 @@ function setup(opts: SetupOpts = {}): Recorded {
 
   const recorded: Recorded = { toolCallHandler: null, commands: new Map(), fs };
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../bash-approval") as { default: (pi: unknown) => void };
+  const mod = require("../extensions") as { default: (pi: unknown) => void };
   mod.default(makeFakePi(recorded));
 
   return recorded;

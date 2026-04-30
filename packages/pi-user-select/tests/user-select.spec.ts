@@ -114,7 +114,7 @@ function setup(): Recorded {
 
   const recorded: Recorded = { tools: new Map() };
   // eslint-disable-next-line @typescript-eslint/no-require-imports
-  const mod = require("../user-select") as { default: (pi: unknown) => void };
+  const mod = require("../extensions") as { default: (pi: unknown) => void };
   mod.default(makeFakePi(recorded));
 
   return recorded;

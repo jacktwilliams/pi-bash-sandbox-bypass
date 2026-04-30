@@ -1,0 +1,19 @@
+{
+  "name": "@fgladisch/pi-caveman",
+  "version": "0.1.0",
+  "description": "Always-on caveman mode extension for Pi",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "files": [
+    "extensions",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

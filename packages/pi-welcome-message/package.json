@@ -1,0 +1,19 @@
+{
+  "name": "@fgladisch/pi-welcome-message",
+  "version": "0.1.0",
+  "description": "Workspace startup summary message extension for Pi",
+  "keywords": [
+    "pi-package"
+  ],
+  "license": "MIT",
+  "files": [
+    "extensions",
+    "README.md"
+  ],
+  "peerDependencies": {
+    "@mariozechner/pi-coding-agent": "*"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

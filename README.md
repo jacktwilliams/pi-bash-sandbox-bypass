@@ -35,9 +35,6 @@ do — pi keeps working normally.
 | `/caveman lite`                 | Enable, intensity `lite` — no filler/hedging, full sentences                     |
 | `/caveman full`                 | Enable, intensity `full` (default) — drop articles, fragments OK, short synonyms |
 | `/caveman ultra`                | Enable, intensity `ultra` — abbreviations, arrows, one-word answers              |
-| `/caveman wenyan-lite`          | Enable, classical Chinese lite (semi-classical, full grammar)                    |
-| `/caveman wenyan-full`          | Enable, classical Chinese full (文言文, ~80–90% char reduction)                  |
-| `/caveman wenyan-ultra`         | Enable, classical Chinese ultra (extreme compression)                            |
 | `/caveman off`                  | Disable injection (state persists, data stays installed)                         |
 | `/caveman update`               | `git clone` (first run) or `git pull --ff-only` upstream repo                    |
 
@@ -60,9 +57,6 @@ Example — "Why React component re-render?"
 - **lite**: "Your component re-renders because you create a new object reference each render. Wrap it in `useMemo`."
 - **full**: "New object ref each render. Inline object prop = new ref = re-render. Wrap in `useMemo`."
 - **ultra**: "Inline obj prop → new ref → re-render. `useMemo`."
-- **wenyan-lite**: "組件頻重繪，以每繪新生對象參照故。以 useMemo 包之。"
-- **wenyan-full**: "物出新參照，致重繪。useMemo Wrap之。"
-- **wenyan-ultra**: "新參照→重繪。useMemo Wrap。"
 
 ### Auto-clarity
 

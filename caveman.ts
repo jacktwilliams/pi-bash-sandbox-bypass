@@ -15,8 +15,7 @@
  *
  * Commands:
  *   /caveman                                 show current status
- *   /caveman lite | full | ultra |           enable with that intensity level
- *     wenyan-lite | wenyan-full | wenyan-ultra
+ *   /caveman lite | full | ultra             enable with that intensity level
  *   /caveman off                             disable injection (data stays installed)
  *   /caveman update                          git pull the upstream repo
  *
@@ -35,14 +34,7 @@ const SKILL_PATH = path.join(UPSTREAM_DIR, "skills", "caveman", "SKILL.md");
 const STATE_PATH = path.join(DATA_DIR, "state.json");
 const UPSTREAM_REPO = "https://github.com/JuliusBrussee/caveman.git";
 
-const VALID_LEVELS = [
-  "lite",
-  "full",
-  "ultra",
-  "wenyan-lite",
-  "wenyan-full",
-  "wenyan-ultra",
-] as const;
+const VALID_LEVELS = ["lite", "full", "ultra"] as const;
 
 const DEFAULT_STATE = {
   enabled: true,
@@ -272,7 +264,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("caveman", {
     description:
-      "Toggle caveman mode and switch intensity (lite/full/ultra/wenyan-*/off/update)",
+      "Toggle caveman mode and switch intensity (lite/full/ultra/off/update)",
     getArgumentCompletions: (prefix) => {
       const filtered = COMPLETION_ITEMS.filter(({ value }) =>
         value.startsWith(prefix),

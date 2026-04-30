@@ -443,31 +443,27 @@ describe("caveman extension", () => {
       });
     });
 
-    it.each([
-      "lite",
-      "full",
-      "ultra",
-      "wenyan-lite",
-      "wenyan-full",
-      "wenyan-ultra",
-    ] as const)("level %s persists and notifies", async (level) => {
-      const rec = setup({ stateFile: null, skillFile: "skill" });
-      const { ctx, notify, setStatus } = makeCtx();
-      rec.fs.writeFileSync.mockClear();
+    it.each(["lite", "full", "ultra"] as const)(
+      "level %s persists and notifies",
+      async (level) => {
+        const rec = setup({ stateFile: null, skillFile: "skill" });
+        const { ctx, notify, setStatus } = makeCtx();
+        rec.fs.writeFileSync.mockClear();
 
-      await getCommand(rec, "caveman").handler(level, ctx);
+        await getCommand(rec, "caveman").handler(level, ctx);
 
-      const [, content] = rec.fs.writeFileSync.mock.calls[0]!;
-      expect(JSON.parse(content as string)).toEqual({
-        enabled: true,
-        level,
-      });
-      expect(setStatus).toHaveBeenCalledWith(
-        "caveman",
-        expect.stringContaining(`caveman ${level}`),
-      );
-      expect(notify).toHaveBeenCalledWith(`caveman ON (${level})`, "info");
-    });
+        const [, content] = rec.fs.writeFileSync.mock.calls[0]!;
+        expect(JSON.parse(content as string)).toEqual({
+          enabled: true,
+          level,
+        });
+        expect(setStatus).toHaveBeenCalledWith(
+          "caveman",
+          expect.stringContaining(`caveman ${level}`),
+        );
+        expect(notify).toHaveBeenCalledWith(`caveman ON (${level})`, "info");
+      },
+    );
 
     it("level reports persistence error and does not mutate state", async () => {
       const rec = setup({
@@ -687,14 +683,10 @@ describe("caveman extension", () => {
     it("returns matching tokens when prefix has matches", () => {
       const rec = setup({ stateFile: null, skillFile: "skill" });
       const completions = getCommand(rec, "caveman").getArgumentCompletions!(
-        "wen",
+        "ult",
       );
 
-      expect(completions).toEqual([
-        { value: "wenyan-lite", label: "wenyan-lite" },
-        { value: "wenyan-full", label: "wenyan-full" },
-        { value: "wenyan-ultra", label: "wenyan-ultra" },
-      ]);
+      expect(completions).toEqual([{ value: "ultra", label: "ultra" }]);
     });
 
     it("returns all tokens when prefix is empty", () => {
@@ -703,7 +695,7 @@ describe("caveman extension", () => {
         "",
       );
 
-      expect(completions).toHaveLength(9);
+      expect(completions).toHaveLength(6);
     });
 
     it("returns null when no tokens match", () => {

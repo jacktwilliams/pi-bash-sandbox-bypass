@@ -2,9 +2,8 @@
 
 Monorepo for personal Pi extensions.
 
-This root workspace holds shared tooling and local auto-discovery shims
-(`*.ts`). Source-of-truth extension code and full documentation live in
-`packages/`.
+This root workspace holds shared tooling. Source-of-truth extension code
+and full documentation live in `packages/`.
 
 > Do **not** add a `pi.extensions` field to root `package.json` — that would
 > override Pi auto-discovery.

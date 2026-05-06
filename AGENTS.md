@@ -25,6 +25,27 @@ npm run changeset:publish      # publish packages from changesets
 
 There is no build step. Pi loads `.ts` extension files directly.
 
+## Release Workflow (Changesets + CI)
+
+Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`.
+
+1. Add a changeset (`npm run changeset`) for every publishable package change.
+2. Commit and push to `main`.
+3. CI runs `lint`, `typecheck`, `test`, then `changesets/action`.
+4. `changesets/action` opens/updates a release PR (`chore: release packages`).
+5. Merge that release PR to trigger publish with `npm run changeset:publish`.
+
+### Required GitHub settings
+
+- Actions workflow permissions: **Read and write permissions**.
+- Enable: **Allow GitHub Actions to create and approve pull requests**.
+- `NPM_TOKEN` repository secret present.
+
+### Release caveats
+
+- Do not manually bump package versions for normal releases; let changesets own versioning.
+- If CI fails with `ENOENT .../packages/<pkg>/CHANGELOG.md`, add `CHANGELOG.md` in that package.
+
 **Pre-commit hook** (`.husky/pre-commit`) runs `npx lint-staged && npm run typecheck && npm test`. For staged `.ts` files lint-staged runs `organize-imports-cli` (sorts/removes unused imports via the TS language service) and then `eslint --fix`; for staged `.{ts,js,cjs,md,json}` files it runs `prettier --write` (see `lint-staged` config in [package.json](package.json)).
 
 ## Tooling Preference

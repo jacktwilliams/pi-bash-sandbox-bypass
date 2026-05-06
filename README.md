@@ -12,3 +12,26 @@ and full documentation live in `packages/`.
 - [`@fgladisch/pi-user-select`](packages/pi-user-select/README.md): Adds a `user_select` tool so Pi can ask humans multiple-choice questions in workflow.
 - [`@fgladisch/pi-persistent-history`](packages/pi-persistent-history/README.md): Persists prompt input history per project and preloads it for up/down recall across sessions.
 - [`@fgladisch/pi-welcome-message`](packages/pi-welcome-message/README.md): Shows a startup workspace summary with package info, git status, and useful resource links.
+
+## Releasing (Changesets + CI)
+
+This repo publishes through GitHub Actions on `main` via `.github/workflows/release.yml`.
+
+1. Add a changeset for package changes:
+   - `npm run changeset`
+2. Commit and push to `main`.
+3. CI runs lint/typecheck/test and `changesets/action`:
+   - creates or updates release PR: `chore: release packages`
+4. Merge release PR.
+5. CI publishes to npm using `NPM_TOKEN`.
+
+### Required repository settings
+
+- GitHub Actions workflow permissions: **Read and write permissions**
+- Enable: **Allow GitHub Actions to create and approve pull requests**
+- Repository secret: `NPM_TOKEN`
+
+### Notes
+
+- Keep package versions source-controlled via changesets; do not manually bump versions for normal releases.
+- If release job fails with `ENOENT .../packages/<pkg>/CHANGELOG.md`, add `CHANGELOG.md` to that package.

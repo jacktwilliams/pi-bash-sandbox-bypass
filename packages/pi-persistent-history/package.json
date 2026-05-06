@@ -13,6 +13,10 @@
   "peerDependencies": {
     "@mariozechner/pi-coding-agent": "*"
   },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/fgladisch/pi-extensions.git"
+  },
   "publishConfig": {
     "access": "public"
   }

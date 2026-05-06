@@ -30,7 +30,7 @@ There is no build step. Pi loads `.ts` extension files directly.
 Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`.
 
 1. Add a changeset (`npm run changeset`) for every publishable package change.
-2. Always update `CHANGELOG.md` before releasing a new version.
+2. Always update `packages/<package>/CHANGELOG.md` before releasing a new version.
 3. Commit and push to `main`.
 4. CI runs `lint`, `typecheck`, `test`, then `changesets/action`.
 5. `changesets/action` opens/updates a release PR (`chore: release packages`).

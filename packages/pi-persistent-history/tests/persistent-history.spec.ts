@@ -231,7 +231,7 @@ describe("persistent-history extension", () => {
     expect(recorded.sendMessage).toHaveBeenCalledWith({
       customType: "persistent-history-status",
       content: expect.stringMatching(
-        /^\[Persistent History\] Loaded 2 entries \(max: 250\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+        /^\[Persistent History\]\n  Loaded 2 entries \(max: 250\)\n  Since: \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2}\n  From file: \.pi\/input-history\.jsonl$/,
       ),
       display: true,
     });
@@ -376,13 +376,13 @@ describe("persistent-history extension", () => {
     expect(recorded.sendMessage).toHaveBeenCalledWith({
       customType: "persistent-history-status",
       content: expect.stringMatching(
-        /^\[Persistent History\] Loaded 2 entries \(max: 3\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+        /^\[Persistent History\]\n  Loaded 2 entries \(max: 3\)\n  Since: \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2}\n  From file: \.pi\/input-history\.jsonl$/,
       ),
       display: true,
     });
   });
 
-  it("status keeps one-line summary format when editor has no addToHistory", async () => {
+  it("status keeps multiline summary format when editor has no addToHistory", async () => {
     const recorded = setup();
     const { ctx } = makeCtx({ focusedEditor: {} });
 
@@ -391,7 +391,7 @@ describe("persistent-history extension", () => {
 
     const [message] = recorded.sendMessage.mock.calls.at(-1)!;
     expect((message as { content: string }).content).toMatch(
-      /^\[Persistent History\] Loaded 0 entries \(max: 250\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+      /^\[Persistent History\]\n  Loaded 0 entries \(max: 250\)\n  Since: \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2}\n  From file: \.pi\/input-history\.jsonl$/,
     );
   });
 });

@@ -1,5 +1,16 @@
 # @fgladisch/pi-persistent-history
 
+## 0.4.0
+
+- Render startup and status output in multiline section format:
+  - `[Persistent History]`
+  - `  Loaded N entries (max: M)`
+  - `  Since: YYYY/MM/DD, HH:mm`
+  - `  From file: .pi/input-history.jsonl`
+- Keep reload message behavior unchanged.
+
+_Changes based on: `3ffce3d`._
+
 ## 0.3.0
 
 - Render persistent history startup/reload/status updates as custom messages via `pi.sendMessage` and `registerMessageRenderer`.

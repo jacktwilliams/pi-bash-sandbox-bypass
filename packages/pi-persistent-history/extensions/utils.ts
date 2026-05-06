@@ -381,7 +381,12 @@ export function buildLoadedHistoryMessage(runtime: RuntimeState): string {
   const sinceTimestampMs = getLoadedSinceTimestamp(runtime);
   const since = formatTimestampForStartupMessage(sinceTimestampMs);
 
-  return `[Persistent History] Loaded ${runtime.entries.length} entries (max: ${runtime.maxEntries}) since ${since} from ${HISTORY_FILE_DISPLAY_PATH}.`;
+  return [
+    "[Persistent History]",
+    `  Loaded ${runtime.entries.length} entries (max: ${runtime.maxEntries})`,
+    `  Since: ${since}`,
+    `  From file: ${HISTORY_FILE_DISPLAY_PATH}`,
+  ].join("\n");
 }
 
 export function buildStatusMessage(runtime: RuntimeState): string {

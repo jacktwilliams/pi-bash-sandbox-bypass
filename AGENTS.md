@@ -27,6 +27,12 @@ There is no build step. Pi loads `.ts` extension files directly.
 
 **Pre-commit hook** (`.husky/pre-commit`) runs `npx lint-staged && npm run typecheck && npm test`. For staged `.ts` files lint-staged runs `organize-imports-cli` (sorts/removes unused imports via the TS language service) and then `eslint --fix`; for staged `.{ts,js,cjs,md,json}` files it runs `prettier --write` (see `lint-staged` config in [package.json](package.json)).
 
+## Tooling Preference
+
+- Prefer shell commands (`rg`, `find`, `ls`, `gh`, `jq`) for repository inspection, data extraction, and automation.
+- Avoid Python scripts when a bash command can do the job clearly.
+- Use Python only when bash would be significantly more complex or less readable.
+
 ## Project Layout
 
 ```

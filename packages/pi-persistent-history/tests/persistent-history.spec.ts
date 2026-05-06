@@ -1,4 +1,6 @@
 import { describe, expect, it, jest } from "@jest/globals";
+import * as os from "node:os";
+import * as path from "node:path";
 
 jest.mock(
   "@mariozechner/pi-coding-agent",
@@ -15,6 +17,14 @@ jest.mock("node:fs", () => ({
   writeFileSync: jest.fn(),
   mkdirSync: jest.fn(),
 }));
+
+const HISTORY_FILE_PATH = "/tmp/project/.pi/input-history.jsonl";
+const GLOBAL_SETTINGS_PATH = path.join(
+  os.homedir(),
+  ".pi",
+  "agent",
+  "settings.json",
+);
 
 type InputHandler = (
   event: { text: string; source: string },
@@ -124,6 +134,23 @@ function enoent(): NodeJS.ErrnoException {
   return error;
 }
 
+type JsonlLine = {
+  text: string;
+  timestamp?: number;
+};
+
+function parseJsonlLines(raw: string): JsonlLine[] {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .map((line) => JSON.parse(line) as JsonlLine);
+}
+
+function parseJsonlEntries(raw: string): string[] {
+  return parseJsonlLines(raw).map((entry) => entry.text);
+}
+
 describe("persistent-history extension", () => {
   it("registers handlers and commands", () => {
     const recorded = setup();
@@ -134,26 +161,49 @@ describe("persistent-history extension", () => {
     expect(recorded.commands.has("history-status")).toBe(true);
   });
 
-  it("persists prompt input when UI is available", async () => {
+  it("persists prompt input as JSONL when UI is available", async () => {
     const recorded = setup();
     const { ctx } = makeCtx();
 
     await recorded.inputHandler!({ text: "hello", source: "interactive" }, ctx);
 
     expect(recorded.fs.writeFileSync).toHaveBeenCalledTimes(1);
+
+    const [filePath, raw] = recorded.fs.writeFileSync.mock.calls.at(-1)!;
+    expect(filePath).toBe(HISTORY_FILE_PATH);
+
+    const lines = parseJsonlLines(raw as string);
+
+    expect(lines.map((line) => line.text)).toEqual(["hello"]);
+    expect(lines.at(0)?.timestamp).toEqual(expect.any(Number));
   });
 
-  it("injects loaded history into focused editor on session_start", async () => {
+  it("injects loaded JSONL history into focused editor on session_start", async () => {
     const recorded = setup();
-    recorded.fs.readFileSync.mockReturnValue(
-      JSON.stringify({ maxEntries: 250, entries: ["new", "old"] }),
-    );
-    const { ctx, addToHistory } = makeCtx();
+    recorded.fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({});
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return `${JSON.stringify({ text: "new", timestamp: 2000 })}\n${JSON.stringify({ text: "old", timestamp: 1000 })}\n`;
+      }
+
+      return "";
+    });
+
+    const { ctx, addToHistory, notify } = makeCtx();
 
     await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
 
     expect(addToHistory).toHaveBeenNthCalledWith(1, "old");
     expect(addToHistory).toHaveBeenNthCalledWith(2, "new");
+    expect(notify).toHaveBeenCalledWith(
+      expect.stringMatching(
+        /^\[Persistent History\] Loaded 2 entries \(max: 250\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+      ),
+      "info",
+    );
   });
 
   it("keeps slash commands and skips only consecutive duplicates", async () => {
@@ -175,16 +225,28 @@ describe("persistent-history extension", () => {
     );
 
     const [, raw] = recorded.fs.writeFileSync.mock.calls.at(-1)!;
-    const parsed = JSON.parse(raw as string) as { entries: string[] };
 
-    expect(parsed.entries).toEqual(["/model", "hello", "/model"]);
+    expect(parseJsonlEntries(raw as string)).toEqual([
+      "/model",
+      "hello",
+      "/model",
+    ]);
   });
 
-  it("respects maxEntries from project history file", async () => {
+  it("respects maxEntries from global settings", async () => {
     const recorded = setup();
-    recorded.fs.readFileSync.mockReturnValue(
-      JSON.stringify({ maxEntries: 2, entries: [] }),
-    );
+    recorded.fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({ persistentHistory: { maxEntries: 2 } });
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return "";
+      }
+
+      return "";
+    });
+
     const { ctx } = makeCtx();
 
     await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
@@ -193,9 +255,31 @@ describe("persistent-history extension", () => {
     await recorded.inputHandler!({ text: "three", source: "interactive" }, ctx);
 
     const [, raw] = recorded.fs.writeFileSync.mock.calls.at(-1)!;
-    const parsed = JSON.parse(raw as string) as { entries: string[] };
 
-    expect(parsed.entries).toEqual(["three", "two"]);
+    expect(parseJsonlEntries(raw as string)).toEqual(["three", "two"]);
+  });
+
+  it("does not notify loaded lines on startup when disabled", async () => {
+    const recorded = setup();
+    recorded.fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({
+          persistentHistory: { showStartupMessage: false },
+        });
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return `${JSON.stringify({ text: "from-disk" })}\n`;
+      }
+
+      return "";
+    });
+
+    const { ctx, notify } = makeCtx();
+
+    await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
+
+    expect(notify).not.toHaveBeenCalled();
   });
 
   it("does not persist when UI is unavailable", async () => {
@@ -212,9 +296,18 @@ describe("persistent-history extension", () => {
 
   it("reload command reloads and reports summary", async () => {
     const recorded = setup();
-    recorded.fs.readFileSync.mockReturnValue(
-      JSON.stringify({ maxEntries: 250, entries: ["from-disk"] }),
-    );
+    recorded.fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({ persistentHistory: { maxEntries: 250 } });
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return `${JSON.stringify({ text: "from-disk" })}\n`;
+      }
+
+      return "";
+    });
+
     const { ctx, notify, addToHistory } = makeCtx();
 
     await recorded.commands.get("history-reload")!("", ctx);
@@ -228,21 +321,31 @@ describe("persistent-history extension", () => {
 
   it("status command reports runtime summary", async () => {
     const recorded = setup();
-    recorded.fs.readFileSync.mockReturnValue(
-      JSON.stringify({ maxEntries: 3, entries: ["a", "b"] }),
-    );
+    recorded.fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({ persistentHistory: { maxEntries: 3 } });
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return `${JSON.stringify({ text: "a" })}\n${JSON.stringify({ text: "b" })}\n`;
+      }
+
+      return "";
+    });
+
     const { ctx, notify } = makeCtx();
 
     await recorded.sessionStartHandler!({ reason: "startup" }, ctx);
     await recorded.commands.get("history-status")!("", ctx);
 
     const [message, level] = notify.mock.calls.at(-1)!;
-    expect(message).toContain("entries: 2");
-    expect(message).toContain("maxEntries: 3");
+    expect(message).toMatch(
+      /^\[Persistent History\] Loaded 2 entries \(max: 3\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+    );
     expect(level).toBe("info");
   });
 
-  it("status shows unavailable injection when editor has no addToHistory", async () => {
+  it("status keeps one-line summary format when editor has no addToHistory", async () => {
     const recorded = setup();
     const { ctx, notify } = makeCtx({ focusedEditor: {} });
 
@@ -250,15 +353,21 @@ describe("persistent-history extension", () => {
     await recorded.commands.get("history-status")!("", ctx);
 
     const [message] = notify.mock.calls.at(-1)!;
-    expect(message).toContain("injection: unavailable");
+    expect(message).toMatch(
+      /^\[Persistent History\] Loaded 0 entries \(max: 250\) since \d{4}\/\d{2}\/\d{2}, \d{2}:\d{2} from \.pi\/input-history\.jsonl\.$/,
+    );
   });
 });
 
 describe("persistent-history utils", () => {
   it("loads defaults and writes file on ENOENT", () => {
     const { fs } = setup();
-    fs.readFileSync.mockImplementation(() => {
-      throw enoent();
+    fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH || filePath === HISTORY_FILE_PATH) {
+        throw enoent();
+      }
+
+      return "";
     });
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -273,32 +382,26 @@ describe("persistent-history utils", () => {
     expect(fs.mkdirSync).toHaveBeenCalledWith("/tmp/project/.pi", {
       recursive: true,
     });
-    expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
-  });
-
-  it("falls back to defaults on malformed JSON", () => {
-    const { fs } = setup();
-    fs.readFileSync.mockReturnValue("not-json");
-
-    // eslint-disable-next-line @typescript-eslint/no-require-imports
-    const utils = require("../extensions/utils") as {
-      loadRuntime: (cwd: string) => { maxEntries: number; entries: string[] };
-    };
-
-    const runtime = utils.loadRuntime("/tmp/project");
-
-    expect(runtime.maxEntries).toBe(250);
-    expect(runtime.entries).toEqual([]);
-  });
-
-  it("sanitizes invalid maxEntries and entries", () => {
-    const { fs } = setup();
-    fs.readFileSync.mockReturnValue(
-      JSON.stringify({
-        maxEntries: "bad",
-        entries: ["a", null, 7, " b "],
-      }),
+    expect(fs.writeFileSync).toHaveBeenCalledWith(
+      HISTORY_FILE_PATH,
+      "",
+      "utf8",
     );
+  });
+
+  it("falls back to defaults on malformed settings and malformed history lines", () => {
+    const { fs } = setup();
+    fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return "not-json";
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return `not-json\n${JSON.stringify({ text: "ok" })}\n`;
+      }
+
+      return "";
+    });
 
     // eslint-disable-next-line @typescript-eslint/no-require-imports
     const utils = require("../extensions/utils") as {
@@ -308,6 +411,68 @@ describe("persistent-history utils", () => {
     const runtime = utils.loadRuntime("/tmp/project");
 
     expect(runtime.maxEntries).toBe(250);
-    expect(runtime.entries).toEqual(["a", "b"]);
+    expect(runtime.entries).toEqual(["ok"]);
+  });
+
+  it("sanitizes invalid maxEntries and invalid history lines", () => {
+    const { fs } = setup();
+    fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({
+          persistentHistory: { maxEntries: "bad" },
+        });
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return [
+          JSON.stringify({ text: "a" }),
+          JSON.stringify({ text: " b " }),
+          JSON.stringify({ text: 7 }),
+          JSON.stringify({ nope: "x" }),
+          JSON.stringify("c"),
+        ].join("\n");
+      }
+
+      return "";
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const utils = require("../extensions/utils") as {
+      loadRuntime: (cwd: string) => { maxEntries: number; entries: string[] };
+    };
+
+    const runtime = utils.loadRuntime("/tmp/project");
+
+    expect(runtime.maxEntries).toBe(250);
+    expect(runtime.entries).toEqual(["a", "b", "c"]);
+  });
+
+  it("ignores top-level settings.maxEntries", () => {
+    const { fs } = setup();
+    fs.readFileSync.mockImplementation((filePath: unknown) => {
+      if (filePath === GLOBAL_SETTINGS_PATH) {
+        return JSON.stringify({ maxEntries: 2 });
+      }
+
+      if (filePath === HISTORY_FILE_PATH) {
+        return [
+          JSON.stringify({ text: "one" }),
+          JSON.stringify({ text: "two" }),
+          JSON.stringify({ text: "three" }),
+        ].join("\n");
+      }
+
+      return "";
+    });
+
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
+    const utils = require("../extensions/utils") as {
+      loadRuntime: (cwd: string) => { maxEntries: number; entries: string[] };
+    };
+
+    const runtime = utils.loadRuntime("/tmp/project");
+
+    expect(runtime.maxEntries).toBe(250);
+    expect(runtime.entries).toEqual(["one", "two", "three"]);
   });
 });

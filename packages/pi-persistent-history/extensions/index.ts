@@ -1,6 +1,7 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
 
 import {
+  buildLoadedHistoryMessage,
   buildStatusMessage,
   createDefaultRuntime,
   injectHistoryIntoFocusedEditor,
@@ -22,6 +23,10 @@ export default function (pi: ExtensionAPI) {
       ...runtime,
       lastInjection: injectHistoryIntoFocusedEditor(ctx.ui, runtime.entries),
     };
+
+    if (runtime.showStartupMessage) {
+      ctx.ui.notify(buildLoadedHistoryMessage(runtime), "info");
+    }
   });
 
   pi.on("input", (event, ctx) => {
@@ -70,7 +75,7 @@ export default function (pi: ExtensionAPI) {
     description: "Show persistent prompt history status",
     // eslint-disable-next-line @typescript-eslint/require-await -- command API expects Promise<void>
     handler: async (_args, ctx) => {
-      ctx.ui.notify(buildStatusMessage(ctx.cwd, runtime), "info");
+      ctx.ui.notify(buildStatusMessage(runtime), "info");
     },
   });
 }

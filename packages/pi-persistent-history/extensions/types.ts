@@ -1,6 +1,6 @@
-export type HistoryFile = {
-  maxEntries: number;
-  entries: string[];
+export type HistoryLine = {
+  text: string;
+  timestamp: number;
 };
 
 export enum InjectionStatus {
@@ -16,6 +16,8 @@ export type InjectionResult = {
 
 export type RuntimeState = {
   maxEntries: number;
+  showStartupMessage: boolean;
   entries: string[];
+  loadedSinceTimestampMs: number | null;
   lastInjection: InjectionResult | null;
 };

@@ -16,7 +16,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerCommand("bash-approval-reload", {
     description:
-      "Reload the bash approval allow-list from ~/.pi/agent/bash-approval.json",
+      "Reload bash approval rules from ~/.pi/agent/.bash-approval and settings from ~/.pi/agent/settings.json",
     // eslint-disable-next-line @typescript-eslint/require-await -- API requires Promise<void>
     handler: async (_args, ctx) => {
       config = loadConfig();
@@ -66,7 +66,7 @@ export default function (pi: ExtensionAPI) {
     if (!ctx.hasUI) {
       return {
         block: true,
-        reason: `Bash command not on allow-list (configure ~/.pi/agent/bash-approval.json): ${trimmedCommand}`,
+        reason: `Bash command not on allow-list (configure ~/.pi/agent/.bash-approval; split behavior in ~/.pi/agent/settings.json): ${trimmedCommand}`,
       };
     }
 

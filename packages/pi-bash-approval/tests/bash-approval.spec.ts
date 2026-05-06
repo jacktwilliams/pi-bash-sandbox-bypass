@@ -7,6 +7,8 @@
  */
 
 import { describe, expect, it, jest } from "@jest/globals";
+import * as os from "node:os";
+import * as path from "node:path";
 
 // `virtual: true` because @mariozechner/pi-coding-agent is ESM-only — Jest's
 // CJS resolver can't load it, but we're replacing it with a stub anyway.
@@ -22,6 +24,7 @@ jest.mock(
 jest.mock("node:fs", () => ({
   readFileSync: jest.fn(),
   writeFileSync: jest.fn(),
+  appendFileSync: jest.fn(),
   mkdirSync: jest.fn(),
 }));
 
@@ -41,6 +44,7 @@ type CommandHandler = (args: string, ctx: unknown) => Promise<void>;
 type FsMock = {
   readFileSync: jest.Mock<(...args: unknown[]) => unknown>;
   writeFileSync: jest.Mock<(...args: unknown[]) => unknown>;
+  appendFileSync: jest.Mock<(...args: unknown[]) => unknown>;
   mkdirSync: jest.Mock<(...args: unknown[]) => unknown>;
 };
 
@@ -84,12 +88,54 @@ function makeCtx(
   return { ctx, notify, select };
 }
 
+const CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");
+const SETTINGS_PATH = path.join(CONFIG_DIR, "settings.json");
+const ALLOW_LIST_PATH = path.join(CONFIG_DIR, ".bash-approval");
+
 type SetupOpts = {
   configFile?: string;
-  readError?: NodeJS.ErrnoException;
+  settingsFile?: string;
+  allowListFile?: string;
+  settingsReadError?: NodeJS.ErrnoException;
+  allowListReadError?: NodeJS.ErrnoException;
   mkdirError?: Error;
   writeFileError?: Error;
 };
+
+type LegacyConfig = {
+  allowed?: unknown;
+  splitChains?: unknown;
+};
+
+function getLegacyConfigFiles(configFile: string | undefined): {
+  settingsFile: string;
+  allowListFile: string;
+} {
+  if (!configFile) {
+    return { settingsFile: "{}", allowListFile: "" };
+  }
+
+  try {
+    const parsed = JSON.parse(configFile) as Partial<LegacyConfig>;
+    const allowed = Array.isArray(parsed.allowed)
+      ? parsed.allowed.filter(
+          (entry): entry is string => typeof entry === "string",
+        )
+      : [];
+    const splitChains =
+      typeof parsed.splitChains === "boolean" ? parsed.splitChains : true;
+
+    return {
+      settingsFile: JSON.stringify({ bashApproval: { splitChains } }),
+      allowListFile: allowed.length > 0 ? `${allowed.join("\n")}\n` : "",
+    };
+  } catch {
+    return {
+      settingsFile: "{}",
+      allowListFile: configFile,
+    };
+  }
+}
 
 function setup(opts: SetupOpts = {}): Recorded {
   jest.resetModules();
@@ -98,15 +144,33 @@ function setup(opts: SetupOpts = {}): Recorded {
   const fs = require("node:fs") as FsMock;
   fs.readFileSync.mockReset();
   fs.writeFileSync.mockReset();
+  fs.appendFileSync.mockReset();
   fs.mkdirSync.mockReset();
 
-  if (opts.readError) {
-    fs.readFileSync.mockImplementation(() => {
-      throw opts.readError;
-    });
-  } else {
-    fs.readFileSync.mockReturnValue(opts.configFile ?? '{"allowed":[]}');
-  }
+  const { settingsFile: legacySettings, allowListFile: legacyAllowList } =
+    getLegacyConfigFiles(opts.configFile);
+  const settingsFile = opts.settingsFile ?? legacySettings;
+  const allowListFile = opts.allowListFile ?? legacyAllowList;
+
+  fs.readFileSync.mockImplementation((filePath: unknown) => {
+    if (filePath === SETTINGS_PATH) {
+      if (opts.settingsReadError) {
+        throw opts.settingsReadError;
+      }
+
+      return settingsFile;
+    }
+
+    if (filePath === ALLOW_LIST_PATH) {
+      if (opts.allowListReadError) {
+        throw opts.allowListReadError;
+      }
+
+      return allowListFile;
+    }
+
+    return "";
+  });
 
   if (opts.mkdirError) {
     fs.mkdirSync.mockImplementation(() => {
@@ -143,52 +207,66 @@ function bashEvent(command: unknown): ToolCallEventLike {
 
 describe("bash-approval extension", () => {
   describe("loadConfig", () => {
-    it("creates default config when file missing (ENOENT)", () => {
-      const { fs } = setup({ readError: enoent() });
+    it("creates default allow-list file when missing (ENOENT)", () => {
+      const { fs } = setup({ allowListReadError: enoent() });
 
       expect(fs.mkdirSync).toHaveBeenCalledWith(expect.any(String), {
         recursive: true,
       });
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
-      const [, content] = fs.writeFileSync.mock.calls[0]!;
-      expect(JSON.parse(content as string)).toEqual({
-        allowed: [],
-        splitChains: true,
-      });
+      expect(fs.writeFileSync).toHaveBeenCalledWith(
+        ALLOW_LIST_PATH,
+        "",
+        "utf8",
+      );
     });
 
     it("ignores write errors during ENOENT recovery", () => {
       expect(() =>
-        setup({ readError: enoent(), writeFileError: new Error("EACCES") }),
+        setup({
+          allowListReadError: enoent(),
+          writeFileError: new Error("EACCES"),
+        }),
       ).not.toThrow();
     });
 
     it("ignores mkdir errors during ENOENT recovery", () => {
       expect(() =>
-        setup({ readError: enoent(), mkdirError: new Error("EACCES") }),
+        setup({
+          allowListReadError: enoent(),
+          mkdirError: new Error("EACCES"),
+        }),
       ).not.toThrow();
     });
 
-    it("falls back to defaults on malformed JSON", async () => {
-      const { toolCallHandler, fs } = setup({ configFile: "this is not json" });
+    it("reads splitChains from settings.json", async () => {
+      const { toolCallHandler } = setup({
+        settingsFile: JSON.stringify({ bashApproval: { splitChains: false } }),
+        allowListFile: "ls && pwd\n",
+      });
       const result = await toolCallHandler!(
-        bashEvent("ls"),
+        bashEvent("ls && pwd"),
         makeCtx({ hasUI: false }).ctx,
       );
 
-      expect(result).toEqual({
-        block: true,
-        reason: expect.stringContaining("ls"),
-      });
-      // Malformed JSON path does NOT recreate the file (only ENOENT does).
-      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(result).toBeUndefined();
     });
 
-    it("filters non-string entries from allowed", async () => {
+    it("defaults splitChains to true when settings.json is malformed", async () => {
       const { toolCallHandler } = setup({
-        configFile: JSON.stringify({
-          allowed: ["ls", 42, null, "git status:*"],
-        }),
+        settingsFile: "not-json",
+        allowListFile: "ls && pwd\n",
+      });
+      const result = await toolCallHandler!(
+        bashEvent("ls && pwd"),
+        makeCtx({ hasUI: false }).ctx,
+      );
+
+      expect(result).toMatchObject({ block: true });
+    });
+
+    it("parses .bash-approval lines and ignores comments/blank lines", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "# heading\n\nls\n  git status:*\n",
       });
 
       expect(
@@ -200,33 +278,6 @@ describe("bash-approval extension", () => {
           makeCtx({ hasUI: false }).ctx,
         ),
       ).toBeUndefined();
-    });
-
-    it("treats non-array allowed as empty list", async () => {
-      const { toolCallHandler } = setup({
-        configFile: JSON.stringify({ allowed: "ls" }),
-      });
-      const result = await toolCallHandler!(
-        bashEvent("ls"),
-        makeCtx({ hasUI: false }).ctx,
-      );
-
-      expect(result).toMatchObject({ block: true });
-    });
-
-    it("respects splitChains: false (whole command must match a single rule)", async () => {
-      const { toolCallHandler } = setup({
-        configFile: JSON.stringify({
-          allowed: ["ls && pwd"],
-          splitChains: false,
-        }),
-      });
-      const result = await toolCallHandler!(
-        bashEvent("ls && pwd"),
-        makeCtx({ hasUI: false }).ctx,
-      );
-
-      expect(result).toBeUndefined();
     });
   });
 
@@ -262,9 +313,17 @@ describe("bash-approval extension", () => {
   describe("/bash-approval-reload command", () => {
     it("re-reads config from disk and reports rule count", async () => {
       const { commands, fs } = setup({ configFile: '{"allowed":[]}' });
-      fs.readFileSync.mockReturnValue(
-        JSON.stringify({ allowed: ["ls", "pwd"] }),
-      );
+      fs.readFileSync.mockImplementation((filePath: unknown) => {
+        if (filePath === SETTINGS_PATH) {
+          return JSON.stringify({ bashApproval: { splitChains: true } });
+        }
+
+        if (filePath === ALLOW_LIST_PATH) {
+          return "ls\npwd\n";
+        }
+
+        return "";
+      });
       const { ctx, notify } = makeCtx();
 
       await commands.get("bash-approval-reload")!("", ctx);
@@ -400,6 +459,60 @@ describe("bash-approval extension", () => {
     });
   });
 
+  describe("tool_call event - shell control filtering", () => {
+    it("ignores if/then/fi scaffolding and evaluates only inner commands", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "test:*\necho:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("if test -f x; then echo ok; fi"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("ignores for/do/done scaffolding and evaluates inner command", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("for item in a b; do echo $item; done"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("ignores assignment-only segments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("FOO=bar && echo hi"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("still evaluates commands that follow assignment prefixes", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("FOO=bar npm test"),
+        makeCtx({ hasUI: false }).ctx,
+      );
+
+      expect(result).toMatchObject({ block: true });
+    });
+  });
+
   describe("tool_call event - non-interactive (no UI)", () => {
     it("blocks with informative reason", async () => {
       const { toolCallHandler } = setup({ configFile: '{"allowed":[]}' });
@@ -412,6 +525,8 @@ describe("bash-approval extension", () => {
         block: true,
         reason: expect.stringContaining("rm -rf /"),
       });
+      expect(result?.reason).toContain(".bash-approval");
+      expect(result?.reason).toContain("settings.json");
     });
   });
 
@@ -438,7 +553,7 @@ describe("bash-approval extension", () => {
       const result = await toolCallHandler!(bashEvent("ls -la"), ctx);
 
       expect(result).toBeUndefined();
-      expect(fs.writeFileSync).not.toHaveBeenCalled();
+      expect(fs.appendFileSync).not.toHaveBeenCalled();
     });
 
     it("persists exact rule on 'Allow always (exact)'", async () => {
@@ -452,11 +567,9 @@ describe("bash-approval extension", () => {
       const result = await toolCallHandler!(bashEvent("npm install foo"), ctx);
 
       expect(result).toBeUndefined();
-      expect(fs.writeFileSync).toHaveBeenCalledTimes(1);
-      const [, content] = fs.writeFileSync.mock.calls.at(-1)!;
-      expect(JSON.parse(content as string).allowed).toContain(
-        "npm install foo",
-      );
+      expect(fs.appendFileSync).toHaveBeenCalledTimes(1);
+      const [, content] = fs.appendFileSync.mock.calls.at(-1)!;
+      expect(content).toContain("npm install foo\n");
       expect(notify).toHaveBeenCalledWith(
         expect.stringContaining("Added rule"),
         "info",
@@ -473,8 +586,8 @@ describe("bash-approval extension", () => {
       const result = await toolCallHandler!(bashEvent("git status -sb"), ctx);
 
       expect(result).toBeUndefined();
-      const [, content] = fs.writeFileSync.mock.calls.at(-1)!;
-      expect(JSON.parse(content as string).allowed).toContain("git status:*");
+      const [, content] = fs.appendFileSync.mock.calls.at(-1)!;
+      expect(content).toContain("git status:*\n");
     });
 
     it("offers two-token prefix for multi-token commands", async () => {
@@ -579,8 +692,8 @@ describe("bash-approval extension", () => {
       );
 
       expect(result).toBeUndefined();
-      const [, content] = fs.writeFileSync.mock.calls.at(-1)!;
-      expect(JSON.parse(content as string).allowed).toContain("git log:*");
+      const [, content] = fs.appendFileSync.mock.calls.at(-1)!;
+      expect(content).toContain("git log:*\n");
     });
 
     it("does not offer exact label when full command literal is already a rule", async () => {
@@ -613,7 +726,7 @@ describe("bash-approval extension", () => {
 
     it("notifies error when persisting exact rule fails", async () => {
       const { toolCallHandler, fs } = setup({ configFile: '{"allowed":[]}' });
-      fs.writeFileSync.mockImplementation(() => {
+      fs.appendFileSync.mockImplementation(() => {
         throw new Error("disk full");
       });
       const { ctx, notify } = makeCtx({
@@ -633,7 +746,7 @@ describe("bash-approval extension", () => {
 
     it("notifies error when persisting prefix rule fails", async () => {
       const { toolCallHandler, fs } = setup({ configFile: '{"allowed":[]}' });
-      fs.writeFileSync.mockImplementation(() => {
+      fs.appendFileSync.mockImplementation(() => {
         throw new Error("nope");
       });
       const { ctx, notify } = makeCtx({
@@ -652,7 +765,7 @@ describe("bash-approval extension", () => {
 
     it("handles non-Error thrown values during persistence", async () => {
       const { toolCallHandler, fs } = setup({ configFile: '{"allowed":[]}' });
-      fs.writeFileSync.mockImplementation(() => {
+      fs.appendFileSync.mockImplementation(() => {
         // eslint-disable-next-line @typescript-eslint/only-throw-error
         throw "string failure";
       });

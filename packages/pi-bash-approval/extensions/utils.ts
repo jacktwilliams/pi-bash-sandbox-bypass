@@ -10,7 +10,8 @@ import type {
 } from "./types";
 
 const CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");
-const CONFIG_PATH = path.join(CONFIG_DIR, "bash-approval.json");
+const SETTINGS_PATH = path.join(CONFIG_DIR, "settings.json");
+const ALLOW_LIST_PATH = path.join(CONFIG_DIR, ".bash-approval");
 
 const DEFAULT_CONFIG: BashApprovalConfig = {
   allowed: [],
@@ -24,6 +25,44 @@ const EXACT_LABEL_COMMAND_MAX_LENGTH = 60;
 const ALLOW_ONCE = "Allow once";
 export const DENY = "Deny";
 export const BLOCKED_BY_USER = "Blocked by user";
+
+const COMMENT_PREFIX = "#";
+const VARIABLE_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/;
+
+const DECLARATION_ONLY_HEADS = new Set([
+  "for",
+  "fi",
+  "done",
+  "case",
+  "esac",
+  "function",
+  "local",
+  "declare",
+  "typeset",
+  "readonly",
+]);
+
+const STRIPPABLE_CONTROL_HEADS = new Set([
+  "if",
+  "then",
+  "elif",
+  "else",
+  "do",
+  "while",
+  "until",
+  "{",
+  "}",
+  "(",
+  ")",
+]);
+
+type BashApprovalSettings = {
+  splitChains?: unknown;
+};
+
+type GlobalSettings = {
+  bashApproval?: BashApprovalSettings;
+};
 
 function truncateForLabel(value: string, maxLength: number): string {
   if (value.length <= maxLength) {
@@ -49,49 +88,81 @@ function errorMessage(error: unknown): string {
   return String(error);
 }
 
-function parseConfig(raw: string): BashApprovalConfig {
-  const parsed = JSON.parse(raw) as Partial<BashApprovalConfig>;
+function sanitizeSplitChains(value: unknown): boolean {
+  if (typeof value === "boolean") {
+    return value;
+  }
 
-  const allowed = Array.isArray(parsed.allowed)
-    ? parsed.allowed.filter(
-        (entry): entry is string => typeof entry === "string",
-      )
-    : [];
-
-  return {
-    allowed,
-    splitChains: parsed.splitChains !== false,
-  };
+  return DEFAULT_CONFIG.splitChains;
 }
 
-function writeDefaultConfigFile(): void {
+function parseGlobalSettings(raw: string): Partial<GlobalSettings> {
+  return JSON.parse(raw) as Partial<GlobalSettings>;
+}
+
+function getBashApprovalSettings(
+  settings: Partial<GlobalSettings>,
+): Partial<BashApprovalSettings> {
+  const { bashApproval } = settings;
+
+  if (!bashApproval || typeof bashApproval !== "object") {
+    return {};
+  }
+
+  return bashApproval;
+}
+
+function loadSplitChainsSetting(): boolean {
+  try {
+    const rawSettings = fs.readFileSync(SETTINGS_PATH, "utf8");
+    const parsedSettings = parseGlobalSettings(rawSettings);
+    const bashApprovalSettings = getBashApprovalSettings(parsedSettings);
+
+    return sanitizeSplitChains(bashApprovalSettings.splitChains);
+  } catch {
+    return DEFAULT_CONFIG.splitChains;
+  }
+}
+
+function parseAllowList(raw: string): string[] {
+  return raw
+    .split(/\r?\n/)
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0)
+    .filter((line) => !line.startsWith(COMMENT_PREFIX));
+}
+
+function writeDefaultAllowListFile(): void {
   try {
     fs.mkdirSync(CONFIG_DIR, { recursive: true });
-    fs.writeFileSync(
-      CONFIG_PATH,
-      `${JSON.stringify(DEFAULT_CONFIG, null, 2)}\n`,
-      "utf8",
-    );
+    fs.writeFileSync(ALLOW_LIST_PATH, "", "utf8");
   } catch {
     // Best effort; the caller falls back to in-memory defaults.
   }
 }
 
-export function loadConfig(): BashApprovalConfig {
+function loadAllowList(): string[] {
   try {
-    return parseConfig(fs.readFileSync(CONFIG_PATH, "utf8"));
+    const rawAllowList = fs.readFileSync(ALLOW_LIST_PATH, "utf8");
+
+    return parseAllowList(rawAllowList);
   } catch (error: unknown) {
     if (errnoCode(error) === "ENOENT") {
-      writeDefaultConfigFile();
+      writeDefaultAllowListFile();
     }
 
-    return { ...DEFAULT_CONFIG };
+    return [];
   }
 }
 
-function saveConfig(config: BashApprovalConfig): void {
-  fs.mkdirSync(CONFIG_DIR, { recursive: true });
-  fs.writeFileSync(CONFIG_PATH, `${JSON.stringify(config, null, 2)}\n`, "utf8");
+export function loadConfig(): BashApprovalConfig {
+  const splitChains = loadSplitChainsSetting();
+  const allowed = loadAllowList();
+
+  return {
+    allowed,
+    splitChains,
+  };
 }
 
 function matchesPrefixGlob(command: string, pattern: string): boolean {
@@ -212,6 +283,72 @@ function splitCommand(command: string): string[] {
   return state.parts.map((part) => part.trim()).filter(Boolean);
 }
 
+function tokenizeSegment(segment: string): string[] {
+  return segment.trim().split(/\s+/).filter(Boolean);
+}
+
+function isVariableAssignmentToken(token: string): boolean {
+  return VARIABLE_ASSIGNMENT_PATTERN.test(token);
+}
+
+function normalizeCommandSegment(segment: string): string | null {
+  let tokens = tokenizeSegment(segment);
+
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  while (tokens.length > 0) {
+    const firstToken = tokens.at(0);
+
+    if (!firstToken) {
+      return null;
+    }
+
+    if (DECLARATION_ONLY_HEADS.has(firstToken)) {
+      return null;
+    }
+
+    if (!STRIPPABLE_CONTROL_HEADS.has(firstToken)) {
+      break;
+    }
+
+    tokens = tokens.slice(1);
+  }
+
+  if (tokens.length === 0) {
+    return null;
+  }
+
+  if (tokens.at(0) === "export") {
+    return null;
+  }
+
+  let assignmentPrefixLength = 0;
+
+  while (assignmentPrefixLength < tokens.length) {
+    const token = tokens.at(assignmentPrefixLength);
+
+    if (!token || !isVariableAssignmentToken(token)) {
+      break;
+    }
+
+    assignmentPrefixLength += 1;
+  }
+
+  if (assignmentPrefixLength === tokens.length) {
+    return null;
+  }
+
+  const commandTokens = tokens.slice(assignmentPrefixLength);
+
+  if (commandTokens.length === 0) {
+    return null;
+  }
+
+  return commandTokens.join(" ");
+}
+
 function suggestPrefixPattern(command: string): string | null {
   const tokens = command.trim().split(/\s+/).filter(Boolean);
   const firstToken = tokens.at(0);
@@ -245,12 +382,15 @@ export function evaluateCommand(
   config: BashApprovalConfig,
 ): CommandEvaluation {
   const trimmedCommand = command.trim();
-  const segments = config.splitChains
+  const rawSegments = config.splitChains
     ? splitCommand(command)
     : [trimmedCommand];
+  const segments = rawSegments
+    .map((segment) => normalizeCommandSegment(segment))
+    .filter((segment): segment is string => segment !== null);
 
   if (segments.length === 0) {
-    return { allMatch: false, failingSegment: trimmedCommand };
+    return { allMatch: true };
   }
 
   const failingSegment = firstFailingSegment(segments, config.allowed);
@@ -307,7 +447,8 @@ function persistRule(
   config.allowed.push(rule);
 
   try {
-    saveConfig(config);
+    fs.mkdirSync(CONFIG_DIR, { recursive: true });
+    fs.appendFileSync(ALLOW_LIST_PATH, `${rule}\n`, "utf8");
     ctx.ui.notify(`Added rule: ${rule}`, "info");
   } catch (error: unknown) {
     ctx.ui.notify(`Failed to persist rule: ${errorMessage(error)}`, "error");

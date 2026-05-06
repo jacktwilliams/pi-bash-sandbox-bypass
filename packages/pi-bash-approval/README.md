@@ -13,17 +13,40 @@ pi install npm:@fgladisch/pi-bash-approval
 
 ## Config
 
-Lives at `~/.pi/agent/bash-approval.json`. Created with sensible defaults on
-first run. If file is malformed, every command prompts.
+This extension reads two files:
+
+1. **Global settings**: `~/.pi/agent/settings.json`
+2. **Allow-list rules**: `~/.pi/agent/.bash-approval`
+
+### Global settings (`settings.json`)
+
+`splitChains` lives at `bashApproval.splitChains`:
 
 ```json
 {
-  "allowed": ["ls", "ls:*", "git status:*", "npm test:*"],
-  "splitChains": true
+  "bashApproval": {
+    "splitChains": true
+  }
 }
 ```
 
-### Pattern syntax (`allowed[]`)
+If missing/malformed, `splitChains` defaults to `true`.
+
+### Allow-list rules (`.bash-approval`)
+
+One rule per line:
+
+```text
+# bash approval allow-list
+ls
+ls:*
+git status:*
+npm test:*
+```
+
+Blank lines and `#` comment lines are ignored.
+
+### Pattern syntax (`.bash-approval` lines)
 
 | Pattern        | Matches                                            |
 | -------------- | -------------------------------------------------- |
@@ -44,6 +67,17 @@ Default `true`: split incoming commands on shell separators (`&&`, `||`, `;`,
 
 Set `false` to match entire command string as one unit.
 
+### Shell control filtering
+
+When `splitChains` is `true`, shell control/declaration segments are ignored so
+approval checks focus on actual commands:
+
+- ignored heads include: `if`, `then`, `elif`, `else`, `for`, `do`, `done`,
+  `fi`, `while`, `until`, `case`, `esac`, `function`
+- assignment-only segments like `FOO=bar` are ignored
+- assignment prefixes before commands are stripped
+  (for example: `FOO=bar npm test` evaluates as `npm test`)
+
 ## Approval prompt
 
 On non-matching command in interactive mode, user picks:
@@ -59,11 +93,11 @@ On non-matching command in interactive mode, user picks:
 - **Deny**: block with reason `Blocked by user`.
 
 Selecting nothing (cancel) is treated as deny. "Allow always" choices persist
-immediately to `bash-approval.json`.
+immediately to `~/.pi/agent/.bash-approval`.
 
 ## Slash commands
 
 | Command                 | Action                                                                          |
 | ----------------------- | ------------------------------------------------------------------------------- |
-| `/bash-approval-reload` | Re-read `~/.pi/agent/bash-approval.json` from disk (use after editing by hand). |
+| `/bash-approval-reload` | Re-read `~/.pi/agent/.bash-approval` and `~/.pi/agent/settings.json` from disk. |
 | `/bash-approval-list`   | Show currently allowed bash patterns.                                           |

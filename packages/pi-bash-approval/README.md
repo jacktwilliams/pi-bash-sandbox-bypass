@@ -84,9 +84,9 @@ approval checks focus on actual commands:
 On non-matching command in interactive mode, user picks:
 
 - **Allow once**: run this invocation, persist nothing.
-- **Allow always (exact): `<command>`**: append literal command to
-  `allowed[]` (truncated to 60 chars in label only). Hidden when exact command
-  already on list.
+- **Allow always (exact): `<command>`**: append literal command as new rule in
+  `~/.pi/agent/.bash-approval` (truncated to 60 chars in label only). Hidden
+  when exact command already on allow-list.
 - **Allow always: `<prefix>:*`**: append suggested prefix rule. Suggestion
   uses first two tokens when present (`git status:*`, `npm install:*`,
   `kubectl get:*`), otherwise first token (`ls:*`). Suggestion is derived from

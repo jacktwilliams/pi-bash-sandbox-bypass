@@ -81,10 +81,13 @@ function setup() {
   };
 }
 
-function makeCtx(hasUI: boolean = true) {
+function makeCtx(hasUI: boolean = true, modelId: string = "test-model") {
   return {
     hasUI,
     cwd: "/test/cwd",
+    model: {
+      id: modelId,
+    },
     ui: {
       theme: {
         bold: (s: string) => `**${s}**`,
@@ -113,9 +116,55 @@ describe("welcome-message extension", () => {
     );
   });
 
-  it("ignores events that are not startup", async () => {
+  it("ignores events that are not startup or new session", async () => {
     const { pi, triggerSessionStart } = setup();
     await triggerSessionStart({ reason: "reload" }, makeCtx());
+    expect(pi.sendMessage).not.toHaveBeenCalled();
+  });
+
+  it("renders welcome message for new sessions by default", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockRejectedValue(new Error("ENOENT"));
+    (pi.exec as jest.Mock<any>).mockImplementation(
+      (cmd: string, args: string[]) => {
+        if (cmd === "git" && args[0] === "branch") {
+          return Promise.resolve({ code: 0, stdout: "main\n" });
+        }
+
+        return Promise.resolve({ code: 1, stdout: "" });
+      },
+    );
+
+    await triggerSessionStart({ reason: "new" }, makeCtx());
+
+    expect(pi.sendMessage).toHaveBeenCalledWith({
+      customType: "welcome",
+      content: expect.stringContaining("<accent>main</accent>"),
+      display: true,
+    });
+  });
+
+  it("suppresses welcome message for new sessions when disabled", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockImplementation((filePath: string) => {
+      if (filePath === "/home/test/.pi/agent/settings.json") {
+        return Promise.resolve(
+          JSON.stringify({
+            welcomeMessage: {
+              showOnNewSession: false,
+            },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+
+    await triggerSessionStart({ reason: "new" }, makeCtx());
+
+    expect(pi.exec).not.toHaveBeenCalled();
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 
@@ -213,6 +262,86 @@ describe("welcome-message extension", () => {
       "<warning>1 file changed, 1 insertion(+)</warning>",
     );
     expect(callArgs.content).toContain("<dim>def5678</dim> fix stuff");
+  });
+
+  it("renders pi logo with current model centered above sections", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockRejectedValue(new Error("ENOENT"));
+    (pi.exec as jest.Mock<any>).mockImplementation(
+      (cmd: string, args: string[]) => {
+        if (cmd === "git" && args[0] === "branch") {
+          return Promise.resolve({ code: 0, stdout: "main\n" });
+        }
+
+        return Promise.resolve({ code: 1, stdout: "" });
+      },
+    );
+
+    await triggerSessionStart(
+      { reason: "startup" },
+      makeCtx(true, "anthropic/claude-sonnet-4"),
+    );
+
+    const callArgs = (pi.sendMessage as jest.Mock<any>).mock
+      .calls[0]![0] as any;
+
+    const lines = (callArgs.content as string).split("\n");
+    expect(lines.at(0)).toBe("");
+    expect(lines.at(1)).toBe("");
+    expect(lines.at(2)).toBe("                  ██████╗  ██╗ ");
+    expect(lines.at(8)).toBe("           anthropic/claude-sonnet-4");
+    expect(lines.at(9)).toBe("");
+    expect(lines.at(10)).toBe("");
+    expect(callArgs.content).toContain("██████╗  ██╗");
+    expect(callArgs.content).toContain("anthropic/claude-sonnet-4");
+    expect(callArgs.content.indexOf("██████╗  ██╗")).toBeLessThan(
+      callArgs.content.indexOf("anthropic/claude-sonnet-4"),
+    );
+    expect(callArgs.content.indexOf("anthropic/claude-sonnet-4")).toBeLessThan(
+      callArgs.content.indexOf("🌿"),
+    );
+  });
+
+  it("omits pi logo and its margin when disabled", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockImplementation((filePath: string) => {
+      if (filePath === "/home/test/.pi/agent/settings.json") {
+        return Promise.resolve(
+          JSON.stringify({
+            welcomeMessage: {
+              showLogo: false,
+            },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+    (pi.exec as jest.Mock<any>).mockImplementation(
+      (cmd: string, args: string[]) => {
+        if (cmd === "git" && args[0] === "branch") {
+          return Promise.resolve({ code: 0, stdout: "main\n" });
+        }
+
+        return Promise.resolve({ code: 1, stdout: "" });
+      },
+    );
+
+    await triggerSessionStart(
+      { reason: "startup" },
+      makeCtx(true, "anthropic/claude-sonnet-4"),
+    );
+
+    const callArgs = (pi.sendMessage as jest.Mock<any>).mock
+      .calls[0]![0] as any;
+
+    expect(callArgs.content).toBe(
+      "🌿 <accent>main</accent>\n📊 <success>Clean working directory</success>",
+    );
+    expect(callArgs.content).not.toContain("██████╗  ██╗");
+    expect(callArgs.content).not.toContain("anthropic/claude-sonnet-4");
   });
 
   it("registers a message renderer that returns a Box", () => {

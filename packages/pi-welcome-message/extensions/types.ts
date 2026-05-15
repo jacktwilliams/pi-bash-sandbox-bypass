@@ -32,6 +32,12 @@ export type EnabledWelcomeSections = {
   readonly piResources: boolean;
 };
 
+export type WelcomeMessageConfig = {
+  readonly sections: EnabledWelcomeSections;
+  readonly showLogo: boolean;
+  readonly showOnNewSession: boolean;
+};
+
 export type WelcomeExtensionAPI = Pick<ExtensionAPI, "exec" | "getCommands">;
 
 export type { PackageSource, Theme };

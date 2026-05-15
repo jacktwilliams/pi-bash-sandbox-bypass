@@ -1,5 +1,15 @@
 # @fgladisch/pi-welcome-message
 
+## 0.3.0
+
+- Show the welcome message for new interactive sessions created with `/new`.
+- Add `welcomeMessage.showOnNewSession` to control whether `/new` sessions show the welcome message; defaults to `true`.
+- Add the Pi logo and current model header above welcome sections.
+- Add `welcomeMessage.showLogo` to hide the Pi logo, model line, and header margin; defaults to `true`.
+- Document the new welcome message settings in README.
+
+_Changes based on: `4562cd8`._
+
 ## 0.2.0
 
 - Add `welcomeMessage.sections` support in `~/.pi/agent/settings.json` to enable/disable top-level welcome sections.

@@ -2,9 +2,9 @@
 
 Shows workspace summary in UI when session starts.
 
-Only runs on real startup in interactive UI. `/new`, forks, and headless
-(`pi -p`) runs are silent. Sections with nothing to show are dropped; if every
-section is empty, no message appears.
+Runs on real startup and new sessions (`/new`) in interactive UI. Forks and
+headless (`pi -p`) runs are silent. Sections with nothing to show are dropped;
+if every section is empty, no message appears.
 
 ## Install
 
@@ -30,19 +30,24 @@ pi install npm:@fgladisch/pi-welcome-message
 
 ## Configuration (`~/.pi/agent/settings.json`)
 
-Configure which top-level welcome sections are shown through
-`welcomeMessage.sections`.
+Configure the welcome message through `welcomeMessage`.
 
 ```json
 {
   "welcomeMessage": {
-    "sections": ["nodePackage", "git", "piResources"]
+    "sections": ["nodePackage", "git", "piResources"],
+    "showLogo": true,
+    "showOnNewSession": true
   }
 }
 ```
 
-- Allowed section names: `nodePackage`, `git`, `piResources`
-- Default when missing/invalid: all sections enabled
-- Empty array (`[]`): disable all welcome output
+- `sections`: top-level sections to show.
+  - Allowed section names: `nodePackage`, `git`, `piResources`
+  - Default when missing/invalid: all sections enabled
+  - Empty array (`[]`): disable all welcome output
+- `showLogo`: show the Pi logo, model line, and surrounding header margin.
+  Defaults to `true`.
+- `showOnNewSession`: show the welcome message after `/new`. Defaults to `true`.
 
 No slash commands.

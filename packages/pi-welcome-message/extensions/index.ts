@@ -5,26 +5,33 @@ import {
   buildGitInfo,
   buildPackageInfo,
   buildResourcesInfo,
+  buildWelcomeHeader,
   formatWelcomeOutput,
-  loadEnabledWelcomeSections,
+  loadWelcomeMessageConfig,
 } from "./utils";
 
 export default function (pi: ExtensionAPI): void {
   registerWelcomeRenderer(pi);
 
   pi.on("session_start", async (event, ctx) => {
-    if (event.reason !== "startup") {
-      return;
-    }
-
-    const { hasUI, ui, cwd } = ctx;
+    const { hasUI, ui, cwd, model } = ctx;
 
     if (!hasUI) {
       return;
     }
 
+    const welcomeConfig = await loadWelcomeMessageConfig();
+
+    if (event.reason === "new" && !welcomeConfig.showOnNewSession) {
+      return;
+    }
+
+    if (event.reason !== "startup" && event.reason !== "new") {
+      return;
+    }
+
     const { theme } = ui;
-    const enabledSections = await loadEnabledWelcomeSections();
+    const enabledSections = welcomeConfig.sections;
     const [packageInfo, gitInfo, resourcesInfo] = await Promise.all([
       enabledSections.nodePackage
         ? buildPackageInfo(cwd, theme)
@@ -35,7 +42,20 @@ export default function (pi: ExtensionAPI): void {
         : Promise.resolve(""),
     ]);
 
-    const output = formatWelcomeOutput([packageInfo, gitInfo, resourcesInfo]);
+    const summaryOutput = formatWelcomeOutput([
+      packageInfo,
+      gitInfo,
+      resourcesInfo,
+    ]);
+
+    if (summaryOutput === null) {
+      return;
+    }
+
+    const headerOutput = welcomeConfig.showLogo
+      ? buildWelcomeHeader(model?.id ?? "no model selected")
+      : "";
+    const output = formatWelcomeOutput([headerOutput, summaryOutput]);
 
     if (output === null) {
       return;

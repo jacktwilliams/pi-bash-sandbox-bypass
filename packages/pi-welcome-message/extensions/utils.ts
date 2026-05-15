@@ -11,11 +11,21 @@ import type {
   PackageSource,
   Theme,
   WelcomeExtensionAPI,
+  WelcomeMessageConfig,
 } from "./types";
 import { WelcomeSection } from "./types";
 
 const SUCCESS_EXIT_CODE = 0;
 const RECENT_COMMITS_COUNT = 5;
+const WELCOME_HEADER_WIDTH = 48;
+const PI_LOGO_LINES = [
+  "  ██████╗  ██╗ ",
+  "  ██╔══██╗ ██║ ",
+  "  ██████╔╝ ██║ ",
+  "  ██╔═══╝  ██║ ",
+  "  ██║      ██║ ",
+  "  ╚═╝      ╚═╝ ",
+];
 
 const AGENT_DIR = getAgentDir();
 const EXTENSIONS_DIR = path.join(AGENT_DIR, "extensions");
@@ -33,27 +43,52 @@ const DEFAULT_ENABLED_WELCOME_SECTIONS: EnabledWelcomeSections = {
   git: true,
   piResources: true,
 };
+const DEFAULT_SHOW_LOGO = true;
+const DEFAULT_SHOW_ON_NEW_SESSION = true;
 
 type WelcomeMessageSettings = {
   sections?: unknown;
+  showLogo?: unknown;
+  showOnNewSession?: unknown;
 };
 
 type GlobalSettings = {
   welcomeMessage?: WelcomeMessageSettings;
 };
 
+export function buildWelcomeHeader(modelId: string): string {
+  return [
+    "",
+    "",
+    ...PI_LOGO_LINES.map((line) => centerLine(line, WELCOME_HEADER_WIDTH)),
+    centerLine(modelId, WELCOME_HEADER_WIDTH),
+    "",
+    "",
+  ].join("\n");
+}
+
 export function formatWelcomeOutput(
   sections: readonly string[],
 ): string | null {
-  const formattedSections = sections
-    .map((section) => section.trim())
-    .filter((section) => section.length > 0);
+  const formattedSections = sections.filter(
+    (section) => section.trim().length > 0,
+  );
 
   if (formattedSections.length === 0) {
     return null;
   }
 
   return formattedSections.join("\n\n");
+}
+
+function centerLine(text: string, width: number): string {
+  const length = [...text].length;
+
+  if (length >= width) {
+    return text;
+  }
+
+  return `${" ".repeat(Math.floor((width - length) / 2))}${text}`;
 }
 
 function parseGlobalSettings(raw: string): Partial<GlobalSettings> {
@@ -97,15 +132,40 @@ function sanitizeEnabledWelcomeSections(
   };
 }
 
-export async function loadEnabledWelcomeSections(): Promise<EnabledWelcomeSections> {
+function sanitizeBooleanSetting(
+  value: unknown,
+  defaultValue: boolean,
+): boolean {
+  if (typeof value !== "boolean") {
+    return defaultValue;
+  }
+
+  return value;
+}
+
+export async function loadWelcomeMessageConfig(): Promise<WelcomeMessageConfig> {
   try {
     const rawSettings = await fs.readFile(SETTINGS_PATH, "utf8");
     const parsedSettings = parseGlobalSettings(rawSettings);
     const welcomeMessageSettings = getWelcomeMessageSettings(parsedSettings);
 
-    return sanitizeEnabledWelcomeSections(welcomeMessageSettings.sections);
+    return {
+      sections: sanitizeEnabledWelcomeSections(welcomeMessageSettings.sections),
+      showLogo: sanitizeBooleanSetting(
+        welcomeMessageSettings.showLogo,
+        DEFAULT_SHOW_LOGO,
+      ),
+      showOnNewSession: sanitizeBooleanSetting(
+        welcomeMessageSettings.showOnNewSession,
+        DEFAULT_SHOW_ON_NEW_SESSION,
+      ),
+    };
   } catch {
-    return { ...DEFAULT_ENABLED_WELCOME_SECTIONS };
+    return {
+      sections: { ...DEFAULT_ENABLED_WELCOME_SECTIONS },
+      showLogo: DEFAULT_SHOW_LOGO,
+      showOnNewSession: DEFAULT_SHOW_ON_NEW_SESSION,
+    };
   }
 }
 

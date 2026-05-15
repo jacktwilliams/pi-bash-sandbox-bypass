@@ -25,6 +25,10 @@ npm run changeset:publish      # publish packages from changesets
 
 There is no build step. Pi loads `.ts` extension files directly.
 
+## Documentation
+
+When making changes, always update relevant `README.md` files in the same change so user-facing docs stay in sync with behavior and configuration.
+
 ## Release Workflow (Changesets + CI + npm Trusted Publisher)
 
 Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`. npm authentication uses Trusted Publisher/OIDC, so no npm automation token is required.

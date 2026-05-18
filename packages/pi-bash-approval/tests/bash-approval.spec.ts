@@ -719,6 +719,30 @@ describe("bash-approval extension", () => {
       expect(captured).not.toContain("Allow always: [ -f:*");
     });
 
+    it("does not split command substitutions when deriving failing-segment prefixes", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent(
+          'for f in $(git ls-files --others --exclude-standard | sort); do echo "$f"; done && rm foo',
+        ),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: rm foo:*");
+      expect(captured).not.toContain("Allow always: sort):*");
+    });
+
     it("does not suggest redirection-only prefixes from shell groups", async () => {
       const { toolCallHandler } = setup({
         allowListFile: "git rev-parse:*\ngit diff:*\ntrue\n",

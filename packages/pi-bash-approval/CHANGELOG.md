@@ -1,5 +1,10 @@
 # @fgladisch/pi-bash-approval
 
+## 0.2.2
+
+- Ignore redirection-only shell group segments when suggesting bash approval rules.
+- Avoid splitting bash approval command chains on separators inside command substitutions.
+
 ## 0.2.1
 
 - Ignore shell condition-test segments (`[ ... ]`, `[[ ... ]]`, `test ...`) during approval matching so prompts no longer suggest invalid rules like `[ -f:*`.

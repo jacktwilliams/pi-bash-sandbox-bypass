@@ -77,6 +77,8 @@ approval checks focus on actual commands:
 - condition tests (`[ ... ]`, `[[ ... ]]`, `test ...`) are ignored
 - assignment-only segments like `FOO=bar` are ignored
 - redirection-only segments like `> /tmp/out` after shell groups are ignored
+- separators inside command substitutions like `$(git ls-files | sort)` are not
+  treated as outer command-chain separators
 - assignment prefixes before commands are stripped
   (for example: `FOO=bar npm test` evaluates as `npm test`)
 

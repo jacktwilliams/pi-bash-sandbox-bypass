@@ -242,6 +242,23 @@ function stepOutsideQuote(
     return 1;
   }
 
+  if (char === "$" && nextChar === "(") {
+    state.commandSubstitutionDepth += 1;
+    state.current += "$(";
+    return 2;
+  }
+
+  if (state.commandSubstitutionDepth > 0) {
+    if (char === "(") {
+      state.commandSubstitutionDepth += 1;
+    } else if (char === ")") {
+      state.commandSubstitutionDepth -= 1;
+    }
+
+    state.current += char;
+    return 1;
+  }
+
   if (isDoubleSeparator(char, nextChar)) {
     flushSegment(state);
     return 2;
@@ -257,7 +274,12 @@ function stepOutsideQuote(
 }
 
 function splitCommand(command: string): string[] {
-  const state: SplitState = { current: "", parts: [], quote: null };
+  const state: SplitState = {
+    commandSubstitutionDepth: 0,
+    current: "",
+    parts: [],
+    quote: null,
+  };
   let index = 0;
 
   while (index < command.length) {

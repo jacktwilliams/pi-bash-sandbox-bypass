@@ -1,5 +1,9 @@
 # @fgladisch/pi-welcome-message
 
+## Unreleased
+
+- Truncate rendered welcome message lines to the terminal width to prevent TUI crashes on long package descriptions.
+
 ## 0.3.0
 
 - Show the welcome message for new interactive sessions created with `/new`.

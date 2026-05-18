@@ -48,6 +48,12 @@ jest.mock(
           return this.text.split("\n");
         }
       },
+      truncateToWidth: (text: string, width: number) => {
+        const chars = [...text];
+
+        return chars.length > width ? chars.slice(0, width).join("") : text;
+      },
+      visibleWidth: (text: string) => withoutAnsi(text).length,
     };
   },
   { virtual: true },
@@ -478,6 +484,31 @@ describe("welcome-message extension", () => {
     );
     expect(rendered).toMatch(/\x1b\[38;2;255;\d+;\d+m/);
     expect(rendered).toContain("summary");
+  });
+
+  it("truncates rendered welcome lines to the render width", () => {
+    const { getRenderer } = setup();
+    const renderer = getRenderer("welcome");
+    expect(renderer).toBeDefined();
+
+    const box = renderer!(
+      {
+        content:
+          "📦 **ai-agents-telco-service**\n_Conversational AI agent service for automated phone calls - orchestrates LLM-driven dialog with real-time telephony via sipgate_",
+        details: {
+          header: null,
+        },
+      },
+      {},
+      makeCtx().ui.theme,
+    );
+    const text = (box.addChild as jest.Mock<any>).mock.calls[0]![0] as {
+      render: (width: number) => string[];
+    };
+
+    const lines = text.render(123);
+
+    expect(lines.every((line) => withoutAnsi(line).length <= 123)).toBe(true);
   });
 
   it("ignores missing git command", async () => {

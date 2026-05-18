@@ -1,5 +1,5 @@
 import type { ExtensionAPI } from "@mariozechner/pi-coding-agent";
-import { Box, Text } from "@mariozechner/pi-tui";
+import { Box, Text, truncateToWidth, visibleWidth } from "@mariozechner/pi-tui";
 
 import type { WelcomeMessageHeader } from "./types";
 import { WelcomeLogoColor } from "./types";
@@ -134,6 +134,10 @@ class RenderWidthWelcomeText extends Text {
     const output =
       formatWelcomeOutput([headerOutput, this.summary]) ?? "Welcome";
 
-    return output.split("\n");
+    return output
+      .split("\n")
+      .map((line) =>
+        visibleWidth(line) > width ? truncateToWidth(line, width) : line,
+      );
   }
 }

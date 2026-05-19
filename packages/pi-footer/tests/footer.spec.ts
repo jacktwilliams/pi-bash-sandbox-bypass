@@ -30,6 +30,7 @@ jest.mock(
 type EventHandler = (...args: readonly unknown[]) => unknown;
 
 type FakePi = {
+  readonly getThinkingLevel: jest.Mock<() => string>;
   readonly on: jest.Mock<(eventName: string, handler: EventHandler) => void>;
   readonly registerCommand: jest.Mock<
     (name: string, command: { readonly handler: EventHandler }) => void
@@ -53,6 +54,7 @@ type FakeContext = {
 };
 
 const DEFAULT_LINE = " gpt-5.5   pi-extensions   main";
+const DEFAULT_EXTENSION_LINE = " gpt-5.5 (medium)   pi-extensions   main";
 
 function setup() {
   jest.resetModules();
@@ -60,6 +62,7 @@ function setup() {
   const handlers = new Map<string, EventHandler>();
   const commands = new Map<string, { readonly handler: EventHandler }>();
   const pi: FakePi = {
+    getThinkingLevel: jest.fn(() => "medium"),
     on: jest.fn((eventName: string, handler: EventHandler) => {
       handlers.set(eventName, handler);
     }),
@@ -249,7 +252,8 @@ describe("pi-footer extension", () => {
   });
 
   it("registers a one-line footer on UI session start", async () => {
-    const { handlers } = setup();
+    const { handlers, pi } = setup();
+    pi.getThinkingLevel.mockReturnValue("off");
     const ctx = makeContext();
     await trigger(handlers, "session_start", { reason: "startup" }, ctx);
 
@@ -261,7 +265,26 @@ describe("pi-footer extension", () => {
       footerData,
     );
 
-    expect(footer.render(200)).toEqual([DEFAULT_LINE]);
+    expect(footer.render(200)).toEqual([
+      " gpt-5.5 (off)   pi-extensions   main",
+    ]);
+  });
+
+  it("renders the current thinking level before any thinking change event", async () => {
+    const { handlers, pi } = setup();
+    pi.getThinkingLevel.mockReturnValue("medium");
+    const ctx = makeContext();
+
+    await trigger(handlers, "session_start", { reason: "startup" }, ctx);
+
+    const { footerData } = makeFooterData();
+    const footer = getFooterFactory(ctx)(
+      { requestRender: jest.fn() },
+      {},
+      footerData,
+    );
+
+    expect(footer.render(200)).toEqual([DEFAULT_EXTENSION_LINE]);
   });
 
   it("does not register a footer without UI", async () => {
@@ -292,7 +315,7 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      `${DEFAULT_LINE}  🪨 caveman lite  preset:dev`,
+      `${DEFAULT_EXTENSION_LINE}  🪨 caveman lite  preset:dev`,
     ]);
   });
 
@@ -312,7 +335,7 @@ describe("pi-footer extension", () => {
     );
 
     expect(footer.render(200)).toEqual([
-      " no-model   workspace   no-branch",
+      " no-model (medium)   workspace   no-branch",
     ]);
   });
 

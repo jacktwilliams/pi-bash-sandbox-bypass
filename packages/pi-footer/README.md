@@ -8,11 +8,7 @@ Default footer:
  gpt-5.5 (med)   pi-extensions   main
 ```
 
-If Pi has not reported a thinking level yet, the model segment omits it:
-
-```text
- gpt-5.5   pi-extensions   main
-```
+On session start, the footer reads Pi's current thinking level via `pi.getThinkingLevel()`, so it is visible immediately. Later changes update through Pi's `thinking_level_select` event.
 
 The extension renders Pi extension statuses from `ctx.ui.setStatus()` after the git branch, using the same separator between status entries.
 

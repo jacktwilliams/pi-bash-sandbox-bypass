@@ -69,6 +69,7 @@ export default function (pi: ExtensionAPI): void {
 
     currentConfig = await loadFooterConfig();
     currentModelId = ctx.model?.id ?? NO_MODEL;
+    currentThinkingLevel = pi.getThinkingLevel();
 
     const projectName = path.basename(ctx.cwd) || WORKSPACE_FALLBACK;
 

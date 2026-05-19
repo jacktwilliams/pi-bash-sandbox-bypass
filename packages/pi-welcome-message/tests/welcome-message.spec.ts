@@ -511,7 +511,7 @@ describe("welcome-message extension", () => {
     expect(lines.every((line) => withoutAnsi(line).length <= 123)).toBe(true);
   });
 
-  it("ignores missing git command", async () => {
+  it("renders the logo even when no summary sections are available", async () => {
     const { pi, triggerSessionStart } = setup();
 
     (fs.readFile as jest.Mock<any>).mockRejectedValue(new Error("ENOENT"));
@@ -520,7 +520,42 @@ describe("welcome-message extension", () => {
     );
 
     await triggerSessionStart({ reason: "startup" }, makeCtx());
-    // Because there is no package json and git fails, output is empty and sendMessage is not called
+
+    expect(pi.sendMessage).toHaveBeenCalledWith({
+      customType: "welcome",
+      content: "",
+      display: true,
+      details: {
+        header: {
+          modelId: "test-model",
+          logoColor: "orange",
+        },
+      },
+    });
+  });
+
+  it("suppresses welcome message when the logo is disabled and no summary sections are available", async () => {
+    const { pi, triggerSessionStart } = setup();
+
+    (fs.readFile as jest.Mock<any>).mockImplementation((filePath: string) => {
+      if (filePath === "/home/test/.pi/agent/settings.json") {
+        return Promise.resolve(
+          JSON.stringify({
+            welcomeMessage: {
+              showLogo: false,
+            },
+          }),
+        );
+      }
+
+      return Promise.reject(new Error("ENOENT"));
+    });
+    (pi.exec as jest.Mock<any>).mockRejectedValue(
+      new Error("Command not found"),
+    );
+
+    await triggerSessionStart({ reason: "startup" }, makeCtx());
+
     expect(pi.sendMessage).not.toHaveBeenCalled();
   });
 

@@ -55,13 +55,20 @@ export default function (pi: ExtensionAPI): void {
       resourcesInfo,
     ]);
 
-    if (summaryOutput === null) {
+    const hasEnabledSummarySection = Object.values(enabledSections).some(
+      (enabled) => enabled,
+    );
+
+    if (
+      summaryOutput === null &&
+      (!welcomeConfig.showLogo || !hasEnabledSummarySection)
+    ) {
       return;
     }
 
     pi.sendMessage({
       customType: "welcome",
-      content: summaryOutput,
+      content: summaryOutput ?? "",
       display: true,
       details: {
         header: welcomeConfig.showLogo

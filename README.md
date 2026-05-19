@@ -2,7 +2,7 @@
 
 Monorepo for personal Pi extensions.
 
-![Example](~/Pictures/example.png)
+![Example](assets/example.png)
 
 This root workspace holds shared tooling. Source-of-truth extension code
 and full documentation live in `packages/`.

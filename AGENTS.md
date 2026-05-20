@@ -9,7 +9,7 @@ npm install                    # Install dev dependencies (run once after clone,
                                # Also installs the husky pre-commit hook via the `prepare` script.
 
 # Development
-npm run typecheck              # tsc -b over workspace project references
+npm run typecheck              # tsc -p tsconfig.typecheck.json --noEmit
 npm test                       # jest
 npm run test:coverage          # jest with coverage report (HTML in coverage/)
 npm run lint                   # eslint --fix over packages/*/{extensions,tests}
@@ -24,6 +24,12 @@ npm run changeset:publish      # publish packages from changesets
 ```
 
 There is no build step. Pi loads `.ts` extension files directly.
+
+## Code Conventions
+
+**Mandatory before code changes:** read `./docs/code-conventions.md` before touching implementation code.
+
+Do not rely on memory of conventions from earlier sessions. Re-read the file in the current session, then implement.
 
 ## Documentation
 
@@ -102,7 +108,7 @@ This repo is a workspace for pi (`@earendil-works/pi-coding-agent`) extension pa
 - Interactive (TUI): `ctx.hasUI === true` and `ctx.ui.{select, notify, ...}` is available
 - Non-interactive (e.g. `pi -p`): `ctx.hasUI === false`. Extensions must not call `ctx.ui.select` and should fall back to a safe default (typically: block)
 
-**Config files** live under `~/.pi/agent/` (e.g. `~/.pi/agent/bash-approval.json`). Extensions own their config schema, load lazily, and provide a `<name>-reload` command to re-read from disk without restarting pi.
+**Config files** live under `~/.pi/agent/` when an extension needs persistent settings. Some extensions read shared `~/.pi/agent/settings.json`; others use package-specific files such as `~/.pi/agent/.bash-approval`, `~/.pi/agent/footer.json`, or `~/.pi/agent/zsh-functions`. Config-driven extensions should expose a reload/status command when runtime reload is useful.
 
 ## Testing
 
@@ -116,7 +122,7 @@ Tests use Jest + ts-jest and live under `packages/<pkg>/tests/<feature>.spec.ts`
 - Provide a `setup()` helper that resets modules, applies fs mocks, calls the extension's default export against a fake `pi` API, and returns the recorded `tool_call` handler and registered commands. See [packages/pi-bash-approval/tests/bash-approval.spec.ts](packages/pi-bash-approval/tests/bash-approval.spec.ts) for the canonical pattern.
 - Build a `makeCtx()` helper that returns `{ ctx, notify, select }` with `ctx.hasUI` togglable and `select` driven by an injected `pick` function — this keeps interactive tests readable.
 
-**Coverage**: thresholds are 80% lines/branches/functions/statements. New extensions should be added to `collectCoverageFrom` in [jest.config.cjs](jest.config.cjs).
+**Coverage**: thresholds are 80% lines/branches/functions/statements. Coverage collection uses the `packages/*/extensions/**/*.ts` glob in [jest.config.cjs](jest.config.cjs), so new package extensions are picked up automatically.
 
 ## Verification
 
@@ -139,8 +145,8 @@ Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest 
 
 1. Create `packages/pi-<feature>/extensions/index.ts` (plus `types.ts` / `utils.ts` as needed).
 2. Default-export `(pi: ExtensionAPI) => void`.
-3. If the extension reads user config, store it under `~/.pi/agent/<feature>.json` and create the file with sensible defaults on first run (ENOENT → write defaults).
-4. Register slash commands via `pi.registerCommand` — at minimum a `<feature>-reload` if the extension is config-driven.
+3. If the extension reads user config, store it under `~/.pi/agent/` using either shared `settings.json` namespacing or a package-specific file. Optional config files may fall back to defaults without being created; mutable config files should be created or updated safely when needed.
+4. Register slash commands via `pi.registerCommand` where useful — for config-driven extensions, add a `<feature>-reload` or status command when runtime reload/inspection matters.
 5. Register event hooks via `pi.on(...)`. Always early-return (bare `return;`) for events you don't handle.
 6. Handle `ctx.hasUI === false` explicitly — pick a safe default (typically: block / no-op) for non-interactive runs.
 7. Add `packages/pi-<feature>/tests/<feature>.spec.ts` (see Testing).

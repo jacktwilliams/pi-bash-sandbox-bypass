@@ -1,7 +1,7 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import { isToolCallEventType } from "@earendil-works/pi-coding-agent";
 
-import { type BashApprovalConfig } from "./types";
+import type { BashApprovalConfig } from "./models";
 import {
   applyChoice,
   BLOCKED_BY_USER,

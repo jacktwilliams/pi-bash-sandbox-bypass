@@ -75,7 +75,10 @@ Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`.
 │   ├── pi-<feature>/
 │   │   ├── extensions/
 │   │   │   ├── index.ts              # Extension entrypoint (default export)
-│   │   │   ├── types.ts              # Package-local types
+│   │   │   ├── models/
+│   │   │   │   ├── index.ts          # Barrel for package-local models/enums
+│   │   │   │   ├── *.model.ts        # Package-local type aliases/models
+│   │   │   │   └── *.enum.ts         # Package-local enums
 │   │   │   └── utils.ts              # Package-local helpers (or utils/*)
 │   │   ├── tests/
 │   │   │   └── <feature>.spec.ts     # Jest specs colocated with package
@@ -97,6 +100,8 @@ Releases are CI-driven from `.github/workflows/release.yml` on pushes to `main`.
 ## Architecture
 
 This repo is a workspace for pi (`@earendil-works/pi-coding-agent`) extension packages. Source-of-truth implementations live in `packages/pi-*/extensions/index.ts`. Each extension entry exports `(pi: ExtensionAPI) => void` and registers commands/hooks against the `ExtensionAPI`.
+
+Package-local type aliases/models live under `packages/pi-*/extensions/models/*.model.ts`; package-local enums live under `packages/pi-*/extensions/models/*.enum.ts`. Each `models/index.ts` is the package-local barrel. Extension code should import models and enums from `./models`, not from individual model files. Do not recreate legacy `extensions/types.ts` files.
 
 **Extension hooks in use** (see [packages/pi-bash-approval/extensions/index.ts](packages/pi-bash-approval/extensions/index.ts) for the canonical example):
 
@@ -143,14 +148,16 @@ Node.js 20+ • TypeScript 5.6 (strict, ES2022, NodeNext) • Jest 29 + ts-jest 
 
 ## Writing a New Extension
 
-1. Create `packages/pi-<feature>/extensions/index.ts` (plus `types.ts` / `utils.ts` as needed).
-2. Default-export `(pi: ExtensionAPI) => void`.
-3. If the extension reads user config, store it under `~/.pi/agent/` using either shared `settings.json` namespacing or a package-specific file. Optional config files may fall back to defaults without being created; mutable config files should be created or updated safely when needed.
-4. Register slash commands via `pi.registerCommand` where useful — for config-driven extensions, add a `<feature>-reload` or status command when runtime reload/inspection matters.
-5. Register event hooks via `pi.on(...)`. Always early-return (bare `return;`) for events you don't handle.
-6. Handle `ctx.hasUI === false` explicitly — pick a safe default (typically: block / no-op) for non-interactive runs.
-7. Add `packages/pi-<feature>/tests/<feature>.spec.ts` (see Testing).
-8. Run `npm run typecheck && npm test` before committing.
+1. Create `packages/pi-<feature>/extensions/index.ts` (plus `utils.ts` as needed).
+2. Put package-local types in `extensions/models/*.model.ts`, enums in `extensions/models/*.enum.ts`, and export them from `extensions/models/index.ts`.
+3. Import package-local models/enums through `./models` from extension source files.
+4. Default-export `(pi: ExtensionAPI) => void`.
+5. If the extension reads user config, store it under `~/.pi/agent/` using either shared `settings.json` namespacing or a package-specific file. Optional config files may fall back to defaults without being created; mutable config files should be created or updated safely when needed.
+6. Register slash commands via `pi.registerCommand` where useful — for config-driven extensions, add a `<feature>-reload` or status command when runtime reload/inspection matters.
+7. Register event hooks via `pi.on(...)`. Always early-return (bare `return;`) for events you don't handle.
+8. Handle `ctx.hasUI === false` explicitly — pick a safe default (typically: block / no-op) for non-interactive runs.
+9. Add `packages/pi-<feature>/tests/<feature>.spec.ts` (see Testing).
+10. Run `npm run typecheck && npm test` before committing.
 
 **Skeleton**:
 

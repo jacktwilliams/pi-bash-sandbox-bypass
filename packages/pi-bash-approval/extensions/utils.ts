@@ -10,7 +10,7 @@ import type {
   GlobalSettings,
   PromptOptions,
   SplitState,
-} from "./types";
+} from "./models";
 
 const CONFIG_DIR = path.join(os.homedir(), ".pi", "agent");
 const SETTINGS_PATH = path.join(CONFIG_DIR, "settings.json");

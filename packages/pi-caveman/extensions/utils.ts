@@ -2,13 +2,9 @@ import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
-import {
-  VALID_LEVELS,
-  type CavemanState,
-  type Exec,
-  type Level,
-  type Result,
-} from "./types";
+import { Level, type CavemanState, type Exec, type Result } from "./models";
+
+const VALID_LEVELS = Object.values(Level);
 
 const DATA_DIR = path.join(os.homedir(), ".pi", "agent", "caveman");
 const UPSTREAM_DIR = path.join(DATA_DIR, "upstream");
@@ -18,7 +14,7 @@ const UPSTREAM_REPO = "https://github.com/JuliusBrussee/caveman.git";
 
 export const DEFAULT_STATE = {
   enabled: true,
-  level: "full",
+  level: Level.Full,
 } as const;
 
 export const COMMAND_TOKENS = [
@@ -32,10 +28,7 @@ export const COMPLETION_ITEMS: readonly { value: string; label: string }[] =
   COMMAND_TOKENS.map((value) => ({ value, label: value }));
 
 export function isLevel(value: unknown): value is Level {
-  return (
-    typeof value === "string" &&
-    (VALID_LEVELS as readonly string[]).includes(value)
-  );
+  return typeof value === "string" && VALID_LEVELS.includes(value as Level);
 }
 
 function errnoCode(error: unknown): string | undefined {

@@ -1,6 +1,6 @@
 import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 
-import type { CavemanState, CavemanUi } from "./types";
+import type { CavemanState, CavemanUi } from "./models";
 import {
   buildSystemPromptInjection,
   COMMAND_TOKENS,

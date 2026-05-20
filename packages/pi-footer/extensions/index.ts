@@ -5,68 +5,14 @@ import {
 import { truncateToWidth, visibleWidth } from "@earendil-works/pi-tui";
 import * as path from "node:path";
 
-import { DEFAULT_FOOTER_CONFIG, type FooterConfig } from "./types";
+import { DEFAULT_FOOTER_CONFIG } from "./defaults";
+import type {
+  FooterConfig,
+  FooterContext,
+  ModelSelectEvent,
+  ThinkingLevelEvent,
+} from "./models";
 import { formatFooterLine, loadFooterConfig } from "./utils";
-
-type FooterContext = {
-  readonly hasUI: boolean;
-  readonly cwd: string;
-  readonly model?: { readonly id?: string };
-  readonly getContextUsage: () =>
-    | { readonly percent: number | null }
-    | undefined;
-  readonly ui: {
-    readonly setEditorComponent: (
-      factory: PromptInputEditorFactory | undefined,
-    ) => void;
-    readonly setFooter: (factory: FooterFactory | undefined) => void;
-    readonly notify: (
-      message: string,
-      level: "info" | "warning" | "error",
-    ) => void;
-    readonly theme: {
-      readonly fg: (color: "accent", text: string) => string;
-    };
-  };
-};
-
-type PromptInputEditorFactory = (
-  tui: ConstructorParameters<typeof CustomEditor>[0],
-  theme: ConstructorParameters<typeof CustomEditor>[1],
-  keybindings: ConstructorParameters<typeof CustomEditor>[2],
-) => PromptInputEditor;
-
-type FooterFactory = (
-  tui: { readonly requestRender: () => void },
-  theme: FooterTheme,
-  footerData: FooterData,
-) => FooterComponent;
-
-type FooterTheme = {
-  readonly fg: (color: "text", text: string) => string;
-};
-
-type FooterData = {
-  readonly getGitBranch: () => string | null;
-  readonly getExtensionStatuses: () => ReadonlyMap<string, string>;
-  readonly onBranchChange: (callback: () => void) => () => void;
-};
-
-type FooterComponent = {
-  readonly render: (width: number) => string[];
-  readonly invalidate: () => void;
-  readonly dispose: () => void;
-};
-
-type ThinkingLevelEvent = {
-  readonly level?: unknown;
-};
-
-type ModelSelectEvent = {
-  readonly model?: {
-    readonly id?: unknown;
-  };
-};
 
 const ANSI_PATTERN =
   /(?:\u001B\][\s\S]*?(?:\u0007|\u001B\\|\u009C))|[\u001B\u009B][[\]()#;?]*(?:\d{1,4}(?:[;:]\d{0,4})*)?[\dA-PR-TZcf-nq-uy=><~]/g;

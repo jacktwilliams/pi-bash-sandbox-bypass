@@ -2,11 +2,8 @@ import { getAgentDir } from "@earendil-works/pi-coding-agent";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-import {
-  DEFAULT_FOOTER_CONFIG,
-  type FooterConfig,
-  type FooterLineInput,
-} from "./types";
+import { DEFAULT_FOOTER_CONFIG } from "./defaults";
+import type { FooterConfig, FooterLineInput } from "./models";
 
 const CONFIG_FILENAME = "footer.json";
 

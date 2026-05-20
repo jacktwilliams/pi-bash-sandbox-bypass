@@ -6,8 +6,7 @@ import {
   visibleWidth,
 } from "@earendil-works/pi-tui";
 
-import type { WelcomeMessageHeader } from "./types";
-import { WelcomeLogoColor } from "./types";
+import { WelcomeLogoColor, type WelcomeMessageHeader } from "./models";
 import {
   buildGitInfo,
   buildPackageInfo,

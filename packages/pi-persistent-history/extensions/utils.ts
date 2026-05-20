@@ -3,16 +3,24 @@ import {
   type ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
 import type { EditorComponent } from "@earendil-works/pi-tui";
+
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
 
 import {
   InjectionStatus,
+  type CustomEditorLike,
+  type FocusedTui,
+  type GlobalPersistentHistoryConfig,
+  type GlobalSettings,
+  type HistoryEditor,
   type HistoryLine,
   type InjectionResult,
+  type ParsedHistoryLine,
+  type PersistentHistorySettings,
   type RuntimeState,
-} from "./types";
+} from "./models";
 
 export const DEFAULT_MAX_ENTRIES = 250;
 const HISTORY_DIRECTORY_NAME = ".pi";
@@ -26,20 +34,6 @@ const GLOBAL_SETTINGS_PATH = path.join(
 );
 const MIN_MAX_ENTRIES = 1;
 const MAX_MAX_ENTRIES = 5000;
-
-type PersistentHistorySettings = {
-  maxEntries?: unknown;
-  showStartupMessage?: unknown;
-};
-
-type GlobalPersistentHistoryConfig = {
-  maxEntries: number;
-  showStartupMessage: boolean;
-};
-
-type GlobalSettings = {
-  persistentHistory?: PersistentHistorySettings;
-};
 
 export function createDefaultRuntime(): RuntimeState {
   return {
@@ -96,11 +90,6 @@ function sanitizeUnixTimestampMs(value: unknown): number | null {
 function getUnixTimestampMs(): number {
   return Date.now();
 }
-
-type ParsedHistoryLine = {
-  text: string;
-  timestampMs: number | null;
-};
 
 function parseHistoryLine(rawLine: string): ParsedHistoryLine | null {
   try {
@@ -286,19 +275,6 @@ export function recordHistoryEntry(
 
   return [trimmed, ...entries].slice(0, maxEntries);
 }
-
-type FocusedTui = {
-  focusedComponent?: unknown;
-};
-
-type HistoryEditor = EditorComponent & {
-  addToHistory?: (text: string) => void;
-};
-
-type CustomEditorLike = HistoryEditor & {
-  actionHandlers?: unknown;
-  onExtensionShortcut?: (data: string) => boolean | undefined;
-};
 
 function isHistoryEditor(value: unknown): value is HistoryEditor {
   if (!value || typeof value !== "object") {

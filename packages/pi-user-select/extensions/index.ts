@@ -3,7 +3,7 @@ import type {
   ExtensionUIContext,
 } from "@earendil-works/pi-coding-agent";
 
-import type { UserSelectInput } from "./types";
+import type { UserSelectInput } from "./models";
 import {
   buildDisplayOptions,
   cancelledResult,

@@ -3,17 +3,21 @@ import type { Dirent } from "node:fs";
 import * as fs from "node:fs/promises";
 import * as path from "node:path";
 
-import type {
-  CommandDescriptor,
-  CommandResults,
-  EnabledWelcomeSections,
-  PackageConfig,
-  PackageSource,
-  Theme,
-  WelcomeExtensionAPI,
-  WelcomeMessageConfig,
-} from "./types";
-import { WelcomeLogoColor, WelcomeSection } from "./types";
+import {
+  WelcomeLogoColor,
+  WelcomeSection,
+  type CommandDescriptor,
+  type CommandResults,
+  type EnabledWelcomeSections,
+  type GlobalSettings,
+  type PackageConfig,
+  type PackageSource,
+  type Rgb,
+  type Theme,
+  type WelcomeExtensionAPI,
+  type WelcomeMessageConfig,
+  type WelcomeMessageSettings,
+} from "./models";
 
 const SUCCESS_EXIT_CODE = 0;
 const RECENT_COMMITS_COUNT = 5;
@@ -67,19 +71,6 @@ const DEFAULT_ENABLED_WELCOME_SECTIONS: EnabledWelcomeSections = {
 const DEFAULT_SHOW_LOGO = true;
 const DEFAULT_SHOW_ON_NEW_SESSION = true;
 const DEFAULT_LOGO_COLOR = WelcomeLogoColor.Orange;
-
-type Rgb = readonly [number, number, number];
-
-type WelcomeMessageSettings = {
-  sections?: unknown;
-  showLogo?: unknown;
-  showOnNewSession?: unknown;
-  logoColor?: unknown;
-};
-
-type GlobalSettings = {
-  welcomeMessage?: WelcomeMessageSettings;
-};
 
 export function buildWelcomeHeader(
   modelId: string,

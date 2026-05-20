@@ -5,7 +5,7 @@ import type {
   SelectOption,
   UserSelectDetails,
   UserSelectInput,
-} from "./types";
+} from "./models";
 
 const CUSTOM_ANSWER_LABEL = "(Type custom answer)";
 const DISPLAY_INDEX_OFFSET = 1;
@@ -111,7 +111,7 @@ function formatOptionLabel(option: SelectOption, index: number): string {
 }
 
 export function buildDisplayOptions(
-  options: SelectOption[],
+  options: readonly SelectOption[],
   allowCustom: boolean,
 ): string[] {
   const formatted = options.map((option, index) =>
@@ -191,7 +191,7 @@ export function resolveSelectedOption(
   toolName: string,
   choice: string,
   displayOptions: string[],
-  options: SelectOption[],
+  options: readonly SelectOption[],
 ): { index: number; option: SelectOption } {
   const index = displayOptions.indexOf(choice);
   const option = index >= 0 ? options.at(index) : undefined;

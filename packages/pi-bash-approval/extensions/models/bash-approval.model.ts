@@ -4,11 +4,11 @@ export type BashApprovalConfig = {
 };
 
 export type BashApprovalSettings = {
-  splitChains?: unknown;
+  readonly splitChains?: unknown;
 };
 
 export type GlobalSettings = {
-  bashApproval?: BashApprovalSettings;
+  readonly bashApproval?: BashApprovalSettings;
 };
 
 export type SplitState = {
@@ -21,10 +21,10 @@ export type SplitState = {
 export type NotifyLevel = "info" | "error";
 
 export type ApprovalCtx = {
-  hasUI: boolean;
-  ui: {
-    notify: (message: string, level: NotifyLevel) => void;
-    select: (
+  readonly hasUI: boolean;
+  readonly ui: {
+    readonly notify: (message: string, level: NotifyLevel) => void;
+    readonly select: (
       message: string,
       options: string[],
     ) => Promise<string | null | undefined>;
@@ -32,10 +32,10 @@ export type ApprovalCtx = {
 };
 
 export type PromptOptions = {
-  options: string[];
-  exactLabel: string;
-  prefixLabel: string | null;
-  suggested: string | null;
+  readonly options: string[];
+  readonly exactLabel: string;
+  readonly prefixLabel: string | null;
+  readonly suggested: string | null;
 };
 
 export type CommandEvaluation =

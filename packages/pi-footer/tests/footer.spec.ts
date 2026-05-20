@@ -143,13 +143,13 @@ function setup() {
 
 function loadUtils() {
   /* eslint-disable @typescript-eslint/no-require-imports -- Jest runs as CJS */
-  const types =
-    require("../extensions/types") as typeof import("../extensions/types");
+  const defaults =
+    require("../extensions/defaults") as typeof import("../extensions/defaults");
   const utils =
     require("../extensions/utils") as typeof import("../extensions/utils");
   /* eslint-enable @typescript-eslint/no-require-imports */
 
-  return { ...types, ...utils };
+  return { ...defaults, ...utils };
 }
 
 function makeContext(overrides: Partial<FakeContext> = {}): FakeContext {

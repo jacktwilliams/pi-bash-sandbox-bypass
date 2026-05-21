@@ -1,3 +1,4 @@
+import type { Theme, ThemeColor } from "@earendil-works/pi-coding-agent";
 import { beforeEach, describe, expect, it, jest } from "@jest/globals";
 import * as fs from "node:fs/promises";
 
@@ -99,6 +100,10 @@ type FakeContext = {
 
 type FooterThemeColor = "accent" | "dim";
 
+type FooterTestTheme = Theme & {
+  readonly fg: jest.Mock<(color: ThemeColor, text: string) => string>;
+};
+
 const DEFAULT_STYLED_LINE = `${accentColor(" gpt-5.5 (medium)")} ${dimColor("")} ${accentColor("󰊚 69%")} ${dimColor("")} ${accentColor(" pi-extensions")} ${dimColor("")} ${accentColor(" main")}`;
 
 function accentColor(text: string): string {
@@ -113,12 +118,14 @@ function footerColor(color: FooterThemeColor, text: string): string {
   return color === "accent" ? accentColor(text) : dimColor(text);
 }
 
-function makeFooterTheme() {
-  return {
-    fg: jest.fn((color: FooterThemeColor, text: string) =>
-      footerColor(color, text),
+function makeFooterTheme(): FooterTestTheme {
+  const theme: Partial<Theme> = {
+    fg: jest.fn((color: ThemeColor, text: string) =>
+      footerColor(color as FooterThemeColor, text),
     ),
   };
+
+  return theme as FooterTestTheme;
 }
 
 function setup() {

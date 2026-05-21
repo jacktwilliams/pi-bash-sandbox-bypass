@@ -1,8 +1,5 @@
+import type { Theme } from "@earendil-works/pi-coding-agent";
 import type { FooterConfig } from "./footer-config.model";
-
-type FooterLineTheme = {
-  readonly fg: (color: "accent" | "dim", text: string) => string;
-};
 
 export type FooterLineInput = {
   readonly config: FooterConfig;
@@ -12,5 +9,5 @@ export type FooterLineInput = {
   readonly projectName: string;
   readonly branchName: string | null;
   readonly extensionStatuses: readonly string[];
-  readonly theme: FooterLineTheme;
+  readonly theme: Theme;
 };

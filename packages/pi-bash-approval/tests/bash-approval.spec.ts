@@ -539,6 +539,189 @@ describe("bash-approval extension", () => {
     });
   });
 
+  describe("tool_call event - backtick substitution handling", () => {
+    it("extracts commands from backtick substitution in assignment values", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "npm test:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent("FOO=`./evil.sh` npm test -- --runInBand"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: ./evil.sh:*");
+    });
+
+    it("blocks backtick substitutions in normal command arguments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      const result = await toolCallHandler!(bashEvent("echo `./evil.sh`"), ctx);
+
+      expect(captured).toContain("Allow always: ./evil.sh:*");
+      expect(result).toEqual({ block: true, reason: "Blocked by user" });
+    });
+
+    it("blocks backtick substitutions inside double-quoted command arguments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent('echo "`mktemp -d`"'),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: mktemp -d:*");
+      expect(result).toEqual({ block: true, reason: "Blocked by user" });
+    });
+
+    it("does not split backtick regions into separate chain segments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("echo `echo a; echo b`"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("extracts backtick commands inside double-quoted assignment values", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "printf:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(
+        bashEvent('tmp="`mktemp -d /tmp/foo-XXXXXX`" && printf \'%s\' "$tmp"'),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: mktemp -d:*");
+    });
+
+    it("ignores literal backticks inside single-quoted assignment values", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("echo '`not-a-command`'"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe("tool_call event - process substitution handling", () => {
+    it("does not split process substitution regions into chain segments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "diff:*\necho:*\nsort\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("diff <(echo a | sort) <(echo b | sort)"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+
+    it("blocks process substitution commands in normal command arguments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "diff:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("diff <(git show HEAD:old) <(git show HEAD:new)"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: git show:*");
+      expect(result).toEqual({ block: true, reason: "Blocked by user" });
+    });
+
+    it("splits and checks chains inside process substitutions", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "diff:*\necho:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("diff <(echo a | sort) file"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: sort:*");
+      expect(result).toEqual({ block: true, reason: "Blocked by user" });
+    });
+
+    it("allows process substitutions when every inner command also matches", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "diff:*\necho:*\nsort\n",
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("diff <(echo a | sort) <(echo b | sort)"),
+        makeCtx().ctx,
+      );
+
+      expect(result).toBeUndefined();
+    });
+  });
+
   describe("tool_call event - non-interactive (no UI)", () => {
     it("blocks with informative reason", async () => {
       const { toolCallHandler } = setup({ configFile: '{"allowed":[]}' });
@@ -792,6 +975,28 @@ describe("bash-approval extension", () => {
 
       expect(captured).toContain("Allow always: rm foo:*");
       expect(captured).not.toContain("Allow always: sort):*");
+    });
+
+    it("blocks command substitutions in normal command arguments", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "echo:*\n",
+      });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      const result = await toolCallHandler!(
+        bashEvent("echo $(./evil.sh)"),
+        ctx,
+      );
+
+      expect(captured).toContain("Allow always: ./evil.sh:*");
+      expect(result).toEqual({ block: true, reason: "Blocked by user" });
     });
 
     it("suggests command substitutions inside assignment-only segments", async () => {

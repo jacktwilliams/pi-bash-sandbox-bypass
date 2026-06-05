@@ -526,20 +526,6 @@ function isRedirectionOperatorToken(token: string | undefined): boolean {
   return REDIRECTION_OPERATOR_PATTERN.test(token);
 }
 
-function assignmentValue(token: string): string | null {
-  if (!isVariableAssignmentToken(token)) {
-    return null;
-  }
-
-  const equalsIndex = token.indexOf("=");
-
-  if (equalsIndex < 0) {
-    return null;
-  }
-
-  return token.slice(equalsIndex + 1);
-}
-
 function readCommandSubstitution(
   value: string,
   substitutionStartIndex: number,
@@ -755,21 +741,21 @@ function findCommandSubstitutions(value: string): string[] {
   return substitutions.filter(Boolean);
 }
 
-function normalizeAssignmentSubstitutions(
+function normalizeSubstitution(substitution: string, depth: number): string[] {
+  return splitCommand(substitution).flatMap((segment) =>
+    normalizeCommandSegments(segment, depth + 1),
+  );
+}
+
+function normalizeTokenSubstitutions(
   tokens: readonly string[],
   depth: number,
 ): string[] {
-  return tokens.flatMap((token) => {
-    const value = assignmentValue(token);
-
-    if (value === null) {
-      return [];
-    }
-
-    return findCommandSubstitutions(value).flatMap((substitution) =>
-      normalizeCommandSegments(substitution, depth + 1),
-    );
-  });
+  return tokens.flatMap((token) =>
+    findCommandSubstitutions(token).flatMap((substitution) =>
+      normalizeSubstitution(substitution, depth),
+    ),
+  );
 }
 
 function normalizeCommandSegments(segment: string, depth = 0): string[] {
@@ -831,7 +817,7 @@ function normalizeCommandSegments(segment: string, depth = 0): string[] {
     assignmentPrefixLength += 1;
   }
 
-  const assignmentCommands = normalizeAssignmentSubstitutions(
+  const assignmentCommands = normalizeTokenSubstitutions(
     tokens.slice(0, assignmentPrefixLength),
     depth,
   );
@@ -846,7 +832,16 @@ function normalizeCommandSegments(segment: string, depth = 0): string[] {
     return assignmentCommands;
   }
 
-  return [...assignmentCommands, commandTokens.join(" ")];
+  const commandSubstitutionCommands = normalizeTokenSubstitutions(
+    commandTokens,
+    depth,
+  );
+
+  return [
+    ...assignmentCommands,
+    ...commandSubstitutionCommands,
+    commandTokens.join(" "),
+  ];
 }
 
 function suggestPrefixPattern(command: string): string | null {

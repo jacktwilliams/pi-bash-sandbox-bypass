@@ -648,6 +648,57 @@ describe("bash-approval extension", () => {
       expect(captured).toContain("Allow always: htop:*");
     });
 
+    it("offers command-only prefix alongside parameter-aware prefix", async () => {
+      const { toolCallHandler } = setup({ configFile: '{"allowed":[]}' });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(bashEvent("mkdir -p foo"), ctx);
+
+      expect(captured).toContain("Allow always: mkdir -p:*");
+      expect(captured).toContain("Allow always (command): mkdir:*");
+    });
+
+    it("does not duplicate command-only prefix for one-word commands", async () => {
+      const { toolCallHandler } = setup({ configFile: '{"allowed":[]}' });
+      let captured: string[] = [];
+      const { ctx } = makeCtx({
+        pick: (options) => {
+          captured = options;
+
+          return "Deny";
+        },
+      });
+
+      await toolCallHandler!(bashEvent("htop"), ctx);
+
+      expect(
+        captured.filter((option) => option.includes("htop:*")),
+      ).toHaveLength(1);
+    });
+
+    it("persists command-only prefix when user accepts it", async () => {
+      const { toolCallHandler, fs } = setup({ configFile: '{"allowed":[]}' });
+      const { ctx } = makeCtx({
+        pick: (options) =>
+          options.find(
+            (option) => option === "Allow always (command): mkdir:*",
+          ) ?? null,
+      });
+
+      const result = await toolCallHandler!(bashEvent("mkdir -p foo"), ctx);
+
+      expect(result).toBeUndefined();
+      const [, content] = fs.appendFileSync.mock.calls.at(-1)!;
+      expect(content).toContain("mkdir:*\n");
+    });
+
     it("does not offer prefix label when prefix is already in allow-list", async () => {
       // `splitChains: false` so the whole literal command is the only segment.
       // Its suggested prefix `git status:*` is already an allow-rule (but doesn't

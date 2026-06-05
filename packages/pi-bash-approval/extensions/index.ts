@@ -81,6 +81,6 @@ export default function (pi: ExtensionAPI) {
       return { block: true, reason: BLOCKED_BY_USER };
     }
 
-    applyChoice(choice, trimmedCommand, prompt, config, ctx);
+    applyChoice(choice, prompt, config, ctx);
   });
 }

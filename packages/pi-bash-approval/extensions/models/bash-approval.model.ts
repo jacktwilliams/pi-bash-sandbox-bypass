@@ -33,9 +33,7 @@ export type ApprovalCtx = {
 
 export type PromptOptions = {
   readonly options: string[];
-  readonly exactLabel: string;
-  readonly prefixLabel: string | null;
-  readonly suggested: string | null;
+  readonly rulesByOption: Record<string, string>;
 };
 
 export type CommandEvaluation =

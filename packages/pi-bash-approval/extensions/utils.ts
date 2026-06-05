@@ -618,11 +618,21 @@ function normalizeCommandSegments(segment: string, depth = 0): string[] {
   return [...assignmentCommands, commandTokens.join(" ")];
 }
 
-function suggestPrefixPattern(command: string): string | null {
-  const tokens = command.trim().split(/\s+/).filter(Boolean);
+function suggestCommandPattern(tokens: readonly string[]): string | null {
   const firstToken = tokens.at(0);
 
   if (!firstToken) {
+    return null;
+  }
+
+  return `${firstToken}:*`;
+}
+
+function suggestPrefixPattern(tokens: readonly string[]): string | null {
+  const firstToken = tokens.at(0);
+  const commandPattern = suggestCommandPattern(tokens);
+
+  if (!firstToken || !commandPattern) {
     return null;
   }
 
@@ -632,7 +642,7 @@ function suggestPrefixPattern(command: string): string | null {
     return `${firstToken} ${secondToken}:*`;
   }
 
-  return `${firstToken}:*`;
+  return commandPattern;
 }
 
 function firstFailingSegment(
@@ -671,6 +681,25 @@ export function evaluateCommand(
   return { allMatch: false, failingSegment };
 }
 
+function addRuleOption(
+  options: string[],
+  rulesByOption: Record<string, string>,
+  label: string,
+  rule: string | null,
+  config: BashApprovalConfig,
+): void {
+  if (!rule || config.allowed.includes(rule)) {
+    return;
+  }
+
+  if (Object.values(rulesByOption).includes(rule)) {
+    return;
+  }
+
+  options.push(label);
+  rulesByOption[label] = rule;
+}
+
 export function buildPromptOptions(
   trimmedCommand: string,
   failingSegment: string,
@@ -680,28 +709,37 @@ export function buildPromptOptions(
     trimmedCommand,
     EXACT_LABEL_COMMAND_MAX_LENGTH,
   )}`;
-
-  const suggested = suggestPrefixPattern(failingSegment);
-  const prefixLabel =
-    suggested &&
-    suggested !== trimmedCommand &&
-    !config.allowed.includes(suggested)
-      ? `Allow always: ${suggested}`
-      : null;
-
+  const suggestionTokens = tokenizeSegment(failingSegment);
+  const suggested = suggestPrefixPattern(suggestionTokens);
+  const suggestedCommand = suggestCommandPattern(suggestionTokens);
   const options: string[] = [ALLOW_ONCE];
+  const rulesByOption: Record<string, string> = {};
 
-  if (!config.allowed.includes(trimmedCommand)) {
-    options.push(exactLabel);
+  addRuleOption(options, rulesByOption, exactLabel, trimmedCommand, config);
+
+  if (suggested !== trimmedCommand) {
+    addRuleOption(
+      options,
+      rulesByOption,
+      `Allow always: ${suggested}`,
+      suggested,
+      config,
+    );
   }
 
-  if (prefixLabel) {
-    options.push(prefixLabel);
+  if (suggestedCommand !== trimmedCommand) {
+    addRuleOption(
+      options,
+      rulesByOption,
+      `Allow always (command): ${suggestedCommand}`,
+      suggestedCommand,
+      config,
+    );
   }
 
   options.push(DENY);
 
-  return { options, exactLabel, prefixLabel, suggested };
+  return { options, rulesByOption };
 }
 
 function persistRule(
@@ -726,17 +764,13 @@ function persistRule(
 
 export function applyChoice(
   choice: string,
-  trimmedCommand: string,
   prompt: PromptOptions,
   config: BashApprovalConfig,
   ctx: ApprovalCtx,
 ): void {
-  if (choice === prompt.exactLabel) {
-    persistRule(config, trimmedCommand, ctx);
-    return;
-  }
+  const rule = prompt.rulesByOption[choice];
 
-  if (prompt.prefixLabel && choice === prompt.prefixLabel && prompt.suggested) {
-    persistRule(config, prompt.suggested, ctx);
+  if (rule) {
+    persistRule(config, rule, ctx);
   }
 }

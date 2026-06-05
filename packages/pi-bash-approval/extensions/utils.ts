@@ -817,31 +817,15 @@ function normalizeCommandSegments(segment: string, depth = 0): string[] {
     assignmentPrefixLength += 1;
   }
 
-  const assignmentCommands = normalizeTokenSubstitutions(
-    tokens.slice(0, assignmentPrefixLength),
-    depth,
-  );
+  const substitutionCommands = normalizeTokenSubstitutions(tokens, depth);
 
   if (assignmentPrefixLength === tokens.length) {
-    return assignmentCommands;
+    return substitutionCommands;
   }
 
   const commandTokens = tokens.slice(assignmentPrefixLength);
 
-  if (commandTokens.length === 0) {
-    return assignmentCommands;
-  }
-
-  const commandSubstitutionCommands = normalizeTokenSubstitutions(
-    commandTokens,
-    depth,
-  );
-
-  return [
-    ...assignmentCommands,
-    ...commandSubstitutionCommands,
-    commandTokens.join(" "),
-  ];
+  return [...substitutionCommands, commandTokens.join(" ")];
 }
 
 function suggestPrefixPattern(command: string): string | null {

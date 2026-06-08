@@ -1025,6 +1025,27 @@ describe("bash-approval extension", () => {
       );
     });
 
+    it("does not treat heredoc bodies in command substitutions as commands", async () => {
+      const { toolCallHandler } = setup({
+        allowListFile: "git commit:*\ngit status:*\ncat:*\n",
+      });
+      const { ctx, select } = makeCtx();
+
+      const result = await toolCallHandler!(
+        bashEvent(
+          `git commit -m "$(cat <<'EOF'
+🔧 chore(deps): update agent graph dependency
+EOF
+)"
+git status --short`,
+        ),
+        ctx,
+      );
+
+      expect(result).toBeUndefined();
+      expect(select).not.toHaveBeenCalled();
+    });
+
     it("suggests quoted command substitutions inside assignments", async () => {
       const { toolCallHandler } = setup({
         allowListFile: "printf:*\n",

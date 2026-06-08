@@ -2,6 +2,7 @@
 
 ## Unreleased
 
+- Ignore heredoc bodies during command splitting so commit messages and other literal heredoc content inside command substitutions are not treated as executable command text.
 - Evaluate command substitutions inside assignment tokens by their inner command so approval suggestions no longer offer invalid flags like `-d ...):*` for commands such as `tmp=$(mktemp -d ...)`, and assignment-prefixed commands also check setup substitutions like `FOO=$(./setup) npm test`.
 
 ## 0.2.2

@@ -33,6 +33,7 @@ const COMMENT_PREFIX = "#";
 const VARIABLE_ASSIGNMENT_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*=/;
 const REDIRECTION_OPERATOR_PATTERN =
   /^(?:\d*)?(?:<|>|>>|<>|>&|<&|<<|<<<|&>|&>>)$/;
+const HEREDOC_REDIRECT_PATTERN = /^(?:\d*)<<-?([^<].*)$/;
 const MAX_NORMALIZATION_DEPTH = 8;
 
 const DECLARATION_ONLY_HEADS = new Set([
@@ -330,6 +331,7 @@ function stepOutsideQuote(
 }
 
 function splitCommand(command: string): string[] {
+  const commandWithoutHeredocBodies = stripHeredocBodies(command);
   const state: SplitState = {
     commandSubstitutionDepth: 0,
     backtickDepth: 0,
@@ -339,9 +341,9 @@ function splitCommand(command: string): string[] {
   };
   let index = 0;
 
-  while (index < command.length) {
-    const char = command.at(index) ?? "";
-    const nextChar = command.at(index + 1);
+  while (index < commandWithoutHeredocBodies.length) {
+    const char = commandWithoutHeredocBodies.at(index) ?? "";
+    const nextChar = commandWithoutHeredocBodies.at(index + 1);
 
     if (state.backtickDepth > 0) {
       index += stepOutsideBacktick(char, nextChar, state);
@@ -504,6 +506,58 @@ function tokenizeSegment(segment: string): string[] {
   flushToken(tokens, current);
 
   return tokens;
+}
+
+function unquoteHeredocDelimiter(token: string): string {
+  return token.replace(/["']/g, "");
+}
+
+function tokenHeredocDelimiter(
+  token: string,
+  nextToken: string | undefined,
+): string | null {
+  if (token === "<<" || token === "<<-") {
+    return nextToken ? unquoteHeredocDelimiter(nextToken) : null;
+  }
+
+  const match = HEREDOC_REDIRECT_PATTERN.exec(token);
+  const delimiter = match?.at(1);
+
+  return delimiter ? unquoteHeredocDelimiter(delimiter) : null;
+}
+
+function findHeredocDelimiters(line: string): string[] {
+  const tokens = tokenizeSegment(line);
+
+  return tokens
+    .map((token, index) => tokenHeredocDelimiter(token, tokens.at(index + 1)))
+    .filter((delimiter): delimiter is string => Boolean(delimiter));
+}
+
+function stripHeredocBodies(command: string): string {
+  if (!command.includes("<<")) {
+    return command;
+  }
+
+  const outputLines: string[] = [];
+  const pendingDelimiters: string[] = [];
+
+  for (const line of command.split("\n")) {
+    const pendingDelimiter = pendingDelimiters.at(0);
+
+    if (pendingDelimiter) {
+      if (line.trim() === pendingDelimiter) {
+        pendingDelimiters.shift();
+      }
+
+      continue;
+    }
+
+    outputLines.push(line);
+    pendingDelimiters.push(...findHeredocDelimiters(line));
+  }
+
+  return outputLines.join("\n");
 }
 
 function isVariableAssignmentToken(token: string): boolean {

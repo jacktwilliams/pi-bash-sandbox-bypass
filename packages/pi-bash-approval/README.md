@@ -86,6 +86,9 @@ approval checks focus on actual commands:
   example: `tmp=$(mktemp -d /tmp/foo-XXXXXX)` evaluates as
   `mktemp -d /tmp/foo-XXXXXX`, and `FOO=$(./setup) npm test` checks both
   `./setup` and `npm test`)
+- heredoc bodies are ignored during command splitting, so literal content inside
+  substitutions such as `$(cat <<'EOF' ... EOF)` is not treated as executable
+  command text
 
 ## Approval prompt
 

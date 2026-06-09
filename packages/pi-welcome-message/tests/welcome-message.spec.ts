@@ -54,6 +54,30 @@ jest.mock(
         return chars.length > width ? chars.slice(0, width).join("") : text;
       },
       visibleWidth: (text: string) => withoutAnsi(text).length,
+      wrapTextWithAnsi: (text: string, width: number) => {
+        const words = text.split(" ");
+        const lines: string[] = [];
+        let currentLine = "";
+
+        for (const word of words) {
+          const candidate =
+            currentLine.length > 0 ? `${currentLine} ${word}` : word;
+
+          if (withoutAnsi(candidate).length > width && currentLine.length > 0) {
+            lines.push(currentLine);
+            currentLine = word;
+            continue;
+          }
+
+          currentLine = candidate;
+        }
+
+        if (currentLine.length > 0) {
+          lines.push(currentLine);
+        }
+
+        return lines.length > 0 ? lines : [""];
+      },
     };
   },
   { virtual: true },
@@ -486,7 +510,7 @@ describe("welcome-message extension", () => {
     expect(rendered).toContain("summary");
   });
 
-  it("truncates rendered welcome lines to the render width", () => {
+  it("wraps rendered welcome lines to the render width with hanging indentation", () => {
     const { getRenderer } = setup();
     const renderer = getRenderer("welcome");
     expect(renderer).toBeDefined();
@@ -494,7 +518,7 @@ describe("welcome-message extension", () => {
     const box = renderer!(
       {
         content:
-          "📦 **ai-agents-telco-service**\n_Conversational AI agent service for automated phone calls - orchestrates LLM-driven dialog with real-time telephony via sipgate_",
+          "[Skills]\n  brainstorming, commit, dispatching-parallel-agents, finishing-a-development-branch, librarian, pi-subagents",
         details: {
           header: null,
         },
@@ -506,9 +530,15 @@ describe("welcome-message extension", () => {
       render: (width: number) => string[];
     };
 
-    const lines = text.render(123);
+    const lines = text.render(48);
+    const wrappedResourceLines = lines.slice(1);
 
-    expect(lines.every((line) => withoutAnsi(line).length <= 123)).toBe(true);
+    expect(lines.length).toBeGreaterThan(3);
+    expect(lines.every((line) => withoutAnsi(line).length <= 48)).toBe(true);
+    expect(wrappedResourceLines.every((line) => line.startsWith("  "))).toBe(
+      true,
+    );
+    expect(lines.join("\n")).toContain("finishing-a-development-branch");
   });
 
   it("renders the logo even when no summary sections are available", async () => {

@@ -5,8 +5,9 @@ Shows workspace summary in UI when session starts.
 Runs on real startup and new sessions (`/new`) in interactive UI. Forks and
 headless (`pi -p`) runs are silent. Sections with nothing to show are dropped;
 if every section is empty, only the logo header appears when enabled. The welcome
-message renders without a custom background, truncates long lines to the
-terminal width, and can show a centered gradient Pi logo header.
+message renders without a custom background, wraps long lines to the terminal
+width while preserving leading indentation, and can show a centered gradient Pi
+logo header.
 
 ## Install
 

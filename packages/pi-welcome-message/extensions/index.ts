@@ -2,8 +2,8 @@ import type { ExtensionAPI } from "@earendil-works/pi-coding-agent";
 import {
   Box,
   Text,
-  truncateToWidth,
   visibleWidth,
+  wrapTextWithAnsi,
 } from "@earendil-works/pi-tui";
 
 import { WelcomeLogoColor, type WelcomeMessageHeader } from "./models";
@@ -130,6 +130,28 @@ function isWelcomeLogoColor(value: string): value is WelcomeLogoColor {
   return Object.values(WelcomeLogoColor).includes(value as WelcomeLogoColor);
 }
 
+function wrapWelcomeLine(line: string, width: number): string[] {
+  const safeWidth = Math.max(width, 1);
+
+  if (visibleWidth(line) <= safeWidth) {
+    return [line];
+  }
+
+  const indentation = line.match(/^[ \t]*/)?.at(0) ?? "";
+  const indentationWidth = visibleWidth(indentation);
+
+  if (indentationWidth === 0 || indentationWidth >= safeWidth) {
+    return wrapTextWithAnsi(line, safeWidth);
+  }
+
+  const content = line.slice(indentation.length);
+  const contentWidth = Math.max(safeWidth - indentationWidth, 1);
+
+  return wrapTextWithAnsi(content, contentWidth).map(
+    (wrappedLine) => `${indentation}${wrappedLine}`,
+  );
+}
+
 class RenderWidthWelcomeText extends Text {
   constructor(
     private readonly summary: string,
@@ -145,10 +167,6 @@ class RenderWidthWelcomeText extends Text {
     const output =
       formatWelcomeOutput([headerOutput, this.summary]) ?? "Welcome";
 
-    return output
-      .split("\n")
-      .map((line) =>
-        visibleWidth(line) > width ? truncateToWidth(line, width) : line,
-      );
+    return output.split("\n").flatMap((line) => wrapWelcomeLine(line, width));
   }
 }

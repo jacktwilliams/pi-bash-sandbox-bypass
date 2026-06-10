@@ -15,6 +15,7 @@ const EMPTY_CUSTOM_TEXT = "User submitted an empty custom answer";
 
 const MAX_OPTION_LINE_WIDTH = 72;
 const MIN_DESCRIPTION_WRAP_WIDTH = 24;
+const DESCRIPTION_INDENT = "    ";
 const WORD_SPLIT_PATTERN = /\s+/;
 
 const OptionSchema = Type.Object({
@@ -80,8 +81,8 @@ function wrapText(text: string, maxWidth: number): string[] {
   return lines;
 }
 
-function getDescriptionWrapWidth(prefixLength: number): number {
-  const availableWidth = MAX_OPTION_LINE_WIDTH - prefixLength;
+function getDescriptionWrapWidth(): number {
+  const availableWidth = MAX_OPTION_LINE_WIDTH - DESCRIPTION_INDENT.length;
 
   if (availableWidth >= MIN_DESCRIPTION_WRAP_WIDTH) {
     return availableWidth;
@@ -98,16 +99,12 @@ function formatOptionLabel(option: SelectOption, index: number): string {
     return head;
   }
 
-  const descriptionPrefix = `${head} — `;
-  const continuationPrefix = " ".repeat(descriptionPrefix.length);
-  const wrapWidth = getDescriptionWrapWidth(descriptionPrefix.length);
-  const descriptionLines = wrapText(description, wrapWidth);
-  const firstLine = descriptionLines.at(0) ?? "";
-  const continuationLines = descriptionLines
-    .slice(1)
-    .map((line) => `${continuationPrefix}${line}`);
+  const wrapWidth = getDescriptionWrapWidth();
+  const descriptionLines = wrapText(description, wrapWidth).map(
+    (line) => `${DESCRIPTION_INDENT}${line}`,
+  );
 
-  return [`${descriptionPrefix}${firstLine}`, ...continuationLines].join("\n");
+  return [head, "", ...descriptionLines].join("\n");
 }
 
 export function buildDisplayOptions(

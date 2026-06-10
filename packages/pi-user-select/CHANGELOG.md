@@ -1,5 +1,9 @@
 # @fgladisch/pi-user-select
 
+## Unreleased
+
+- Render option descriptions after a blank line with four-space indentation instead of inline after the label.
+
 ## 0.1.1
 
 - Fix multiline option description formatting to keep wrapped lines readable with hanging indentation.

@@ -200,7 +200,7 @@ describe("user-select extension", () => {
       expect(input).not.toHaveBeenCalled();
       expect(captured).toEqual([
         "1. npm",
-        "2. pnpm — Faster, content-addressable",
+        "2. pnpm\n\n    Faster, content-addressable",
         "3. yarn",
       ]);
       expect(result.content[0]).toEqual({
@@ -244,20 +244,14 @@ describe("user-select extension", () => {
       const wrapped = captured.at(0) ?? "";
       const wrappedLines = wrapped.split("\n");
 
-      expect(wrappedLines.length).toBeGreaterThan(1);
+      expect(wrappedLines.length).toBeGreaterThan(2);
 
-      const firstLine = wrappedLines.at(0) ?? "";
-      const prefixMatch = firstLine.match(/^(1\. policy graph — )/);
-      const prefix = prefixMatch?.at(1);
+      expect(wrappedLines.at(0)).toBe("1. policy graph");
+      expect(wrappedLines.at(1)).toBe("");
 
-      expect(prefix).toBeDefined();
-
-      if (!prefix) {
-        throw new Error("Expected wrapped option prefix");
-      }
-
-      for (const line of wrappedLines.slice(1)) {
-        expect(line.startsWith(" ".repeat(prefix.length))).toBe(true);
+      for (const line of wrappedLines.slice(2)) {
+        expect(line.startsWith("    ")).toBe(true);
+        expect(line.startsWith("     ")).toBe(false);
       }
     });
 

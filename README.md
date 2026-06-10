@@ -36,10 +36,11 @@ This repo publishes through GitHub Actions on `main` via `.github/workflows/rele
 2. Commit and push to `main`.
 3. CI runs lint/typecheck/test and `changesets/action`:
    - creates or updates release PR: `chore: release packages`
+   - updates package versions and `CHANGELOG.md` files from changesets
 4. Merge release PR.
 5. CI publishes to npm through Trusted Publisher.
 
 ### Notes
 
-- Keep package versions source-controlled via changesets; do not manually bump versions for normal releases.
+- Keep package versions and changelogs source-controlled via changesets; do not manually bump versions for normal releases.
 - If release job fails with `ENOENT .../packages/<pkg>/CHANGELOG.md`, add `CHANGELOG.md` to that package.

@@ -1,9 +1,20 @@
 # @fgladisch/pi-bash-approval
 
-## Unreleased
+## 0.2.6
 
-- Ignore heredoc bodies during command splitting so commit messages and other literal heredoc content inside command substitutions are not treated as executable command text.
-- Evaluate command substitutions inside assignment tokens by their inner command so approval suggestions no longer offer invalid flags like `-d ...):*` for commands such as `tmp=$(mktemp -d ...)`, and assignment-prefixed commands also check setup substitutions like `FOO=$(./setup) npm test`.
+- Ignore heredoc bodies during bash approval command splitting so literal commit message content is not suggested as an allow-list command.
+
+## 0.2.5
+
+- Require nested backtick, command, and process substitutions to match bash approval rules.
+
+## 0.2.4
+
+- Add a command-only allow-list prompt option for bash approvals.
+
+## 0.2.3
+
+- Evaluate command substitutions inside assignment tokens by their inner command so bash approval suggestions no longer offer invalid flag prefixes like `-d ...):*`, and assignment-prefixed commands check setup substitutions before the main command.
 
 ## 0.2.2
 
@@ -15,18 +26,12 @@
 - Ignore shell condition-test segments (`[ ... ]`, `[[ ... ]]`, `test ...`) during approval matching so prompts no longer suggest invalid rules like `[ -f:*`.
 - Move extension settings/split parser types from `extensions/utils.ts` to `extensions/types.ts` for clearer type ownership.
 
-_Changes based on: `8c62ec9`._
-
 ## 0.2.0
 
 - Migrate configuration to `~/.pi/agent/.bash-approval` (rules) and `~/.pi/agent/settings.json` (`bashApproval.splitChains`) instead of `bash-approval.json`.
 - Improve shell-chain parsing by ignoring control/declaration scaffolding (`if/then/fi`, `for/do/done`, assignment-only segments) and evaluating real command segments.
 - Update reload/help text and non-interactive block reason to point to new config paths.
 
-_Changes based on: `ab08f61`._
-
 ## 0.1.0
 
 - Initial release of interactive bash allow-list guard.
-
-_Changes based on: `c32e7ac`._

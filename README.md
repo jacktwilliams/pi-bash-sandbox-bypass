@@ -1,4 +1,4 @@
-# pi-bash-sandbox-bypass
+# pi-sandbox-bypass
 
 I forked https://github.com/fgladisch/pi-extensions
 However I'm only interested in their pi-bash-approval extension.

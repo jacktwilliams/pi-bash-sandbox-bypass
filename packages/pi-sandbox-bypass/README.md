@@ -1,4 +1,4 @@
-# pi-bash-sandbox-bypass
+# pi-sandbox-bypass
 
 Guards Pi `bash_full_permissions` behind an interactive allow-list. The normal
 sandboxed `bash` tool is expected to be handled by a separate sandbox extension;

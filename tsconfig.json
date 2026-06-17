@@ -1,12 +1,6 @@
 {
   "files": [],
   "references": [
-    { "path": "./packages/pi-bash-approval" },
-    { "path": "./packages/pi-caveman" },
-    { "path": "./packages/pi-footer" },
-    { "path": "./packages/pi-user-select" },
-    { "path": "./packages/pi-welcome-message" },
-    { "path": "./packages/pi-persistent-history" },
-    { "path": "./packages/pi-zsh-shell" }
+    { "path": "./packages/pi-bash-approval" }
   ]
 }

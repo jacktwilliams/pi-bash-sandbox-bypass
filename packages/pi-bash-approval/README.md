@@ -1,6 +1,6 @@
-# @fgladisch/pi-bash-approval
+# pi-bash-sandbox-bypass
 
-Guards Pi `bash` tool behind interactive allow-list. Every bash tool call is
+Guards Pi `bash_full_permissions` tool (see top README in the repo) behind interactive allow-list. Every bash tool call is
 intercepted; commands matching configured pattern run silently, anything else
 prompts user. In non-interactive contexts (`pi -p`, no UI), unknown commands
 are blocked with reason pointing at config file.

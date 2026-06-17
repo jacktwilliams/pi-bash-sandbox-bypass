@@ -1,17 +1,21 @@
 # pi-bash-sandbox-bypass
 
-Guards Pi `bash_full_permissions` tool (see top README in the repo) behind interactive allow-list. Every bash tool call is
-intercepted; commands matching configured pattern run silently, anything else
-prompts user. In non-interactive contexts (`pi -p`, no UI), unknown commands
-are blocked with reason pointing at config file.
+Guards Pi `bash_full_permissions` behind an interactive allow-list. The normal
+sandboxed `bash` tool is expected to be handled by a separate sandbox extension;
+this package only decides when the model may use `bash_full_permissions` to
+bypass that sandbox. Commands matching configured patterns run silently,
+anything else prompts the user. In non-interactive contexts (`pi -p`, no UI),
+unknown commands are blocked with a reason pointing at the config file.
 
 <img src="./example.png" alt="Bash approval prompt example" width="600">
 
-## Install
+## Use in pi
 
-```bash
-pi install npm:@fgladisch/pi-bash-approval
-```
+Copy this package's `extensions/index.ts` into `~/.pi/agent/extensions/` (or
+point pi at the package directory as a local prototype) so pi auto-discovers
+it.
+
+No npm publishing or install step is required for this prototype.
 
 ## Config
 

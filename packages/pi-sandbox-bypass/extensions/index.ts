@@ -80,12 +80,6 @@ export default function (pi: ExtensionAPI) {
     },
   });
 
-  pi.on("before_agent_start", async (event) => {
-    return {
-      systemPrompt: `${event.systemPrompt}\n\n${FULL_PERMISSION_SYSTEM_PROMPT}`,
-    };
-  });
-
   pi.on("tool_call", async (event, ctx) => {
     if (!isToolCallEventType(FULL_PERMISSION_TOOL_NAME, event)) {
       return;

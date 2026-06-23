@@ -3,6 +3,7 @@ import {
   createBashTool,
   isToolCallEventType,
 } from "@earendil-works/pi-coding-agent";
+import { Text } from "@earendil-works/pi-tui";
 
 import type { BashApprovalConfig } from "./models";
 import {
@@ -61,7 +62,7 @@ export default function (pi: ExtensionAPI) {
 
   pi.registerTool({
     name: FULL_PERMISSION_TOOL_NAME,
-    label: "bash (full permission)",
+    label: "bash_fp",
     description:
       "Execute a bash command without Pi's sandbox wrapper. Use only after a normal bash command failed because the sandbox or permissions blocked it.",
     promptSnippet: "Execute a bash command without Pi's sandbox wrapper",
@@ -70,6 +71,13 @@ export default function (pi: ExtensionAPI) {
       "Always prefer bash to start; use bash_full_permissions only for the approved fallback.",
     ],
     parameters: bashTool.parameters,
+    renderCall(args, theme, _context) {
+      return new Text(
+        `${theme.fg("toolTitle", theme.bold("bash_fp: "))}${theme.fg("accent", String(args.command ?? ""))}`,
+        0,
+        0,
+      );
+    },
     async execute(toolCallId, params, signal, onUpdate, ctx) {
       return createBashTool(ctx.cwd).execute(
         toolCallId,

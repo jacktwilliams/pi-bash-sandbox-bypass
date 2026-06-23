@@ -3,9 +3,11 @@
 Guards Pi `bash_full_permissions` behind an interactive allow-list. The normal
 sandboxed `bash` tool is expected to be handled by a separate sandbox extension;
 this package only decides when the model may use `bash_full_permissions` to
-bypass that sandbox. Commands matching configured patterns run silently,
-anything else prompts the user. In non-interactive contexts (`pi -p`, no UI),
-unknown commands are blocked with a reason pointing at the config file.
+bypass that sandbox. In the tool UI it renders as `bash_fp: <command>` so you
+can see the exact command being approved. Commands matching configured patterns
+run silently, anything else prompts the user. In non-interactive contexts
+(`pi -p`, no UI), unknown commands are blocked with a reason pointing at the
+config file.
 
 <img src="./example.png" alt="Bash approval prompt example" width="600">
 

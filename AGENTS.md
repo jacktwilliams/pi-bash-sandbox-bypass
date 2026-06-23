@@ -1,5 +1,21 @@
 # AGENTS.md
 
+## Repo-specific notes
+
+- This repo does **not** need proper Node project handling beyond what is already here.
+- Package.json files in this repo have been tweaked before and are not important to keep pristine.
+- This project is installed into Pi via `~/.pi/agent/settings.json` under `packages`, for example:
+
+  ```json
+  {
+    "packages": [
+      "/Users/jawillia/dev/play/pi-bash-sandbox-bypass/packages/pi-sandbox-bypass"
+    ]
+  }
+  ```
+
+- We mainly edit the `.ts` files here, then reload the Pi config to test changes.
+
 ## Commands
 
 ```bash
